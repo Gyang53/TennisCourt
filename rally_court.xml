@@ -22,17 +22,17 @@
     <geom name="net_col" type="box" size="0.006 6.4 0.535" pos="0 0 0.535" mass="0" contype="32" conaffinity="2" group="3"/>
     <geom name="net_post_n" type="capsule" size="0.02 0.535" pos="0 -6.400 0.535" rgba="0.15 0.15 0.16 1" contype="32" conaffinity="2"/>
     <geom name="net_post_p" type="capsule" size="0.02 0.535" pos="0 6.400 0.535" rgba="0.15 0.15 0.16 1" contype="32" conaffinity="2"/>
-    <geom name="line_sideline_d_pos" type="box" size="11.885 0.05 0.001" pos="0 5.485 0.002" rgba="0.95 0.95 0.95 1" contype="0" conaffinity="0"/>
-    <geom name="line_sideline_d_neg" type="box" size="11.885 0.05 0.001" pos="0 -5.485 0.002" rgba="0.95 0.95 0.95 1" contype="0" conaffinity="0"/>
-    <geom name="line_sideline_s_pos" type="box" size="11.885 0.05 0.001" pos="0 4.115 0.002" rgba="0.95 0.95 0.95 1" contype="0" conaffinity="0"/>
-    <geom name="line_sideline_s_neg" type="box" size="11.885 0.05 0.001" pos="0 -4.115 0.002" rgba="0.95 0.95 0.95 1" contype="0" conaffinity="0"/>
-    <geom name="line_baseline_pos" type="box" size="0.05 5.485 0.001" pos="11.885 0 0.002" rgba="0.95 0.95 0.95 1" contype="0" conaffinity="0"/>
-    <geom name="line_baseline_neg" type="box" size="0.05 5.485 0.001" pos="-11.885 0 0.002" rgba="0.95 0.95 0.95 1" contype="0" conaffinity="0"/>
-    <geom name="line_service_pos" type="box" size="0.05 5.485 0.001" pos="6.4 0 0.002" rgba="0.95 0.95 0.95 1" contype="0" conaffinity="0"/>
-    <geom name="line_service_neg" type="box" size="0.05 5.485 0.001" pos="-6.4 0 0.002" rgba="0.95 0.95 0.95 1" contype="0" conaffinity="0"/>
-    <geom name="line_centre" type="box" size="6.4 0.05 0.001" pos="0 0 0.002" rgba="0.95 0.95 0.95 1" contype="0" conaffinity="0"/>
-    <geom name="line_mark_pos" type="box" size="0.05 0.15 0.001" pos="11.885 0 0.002" rgba="0.95 0.95 0.95 1" contype="0" conaffinity="0"/>
-    <geom name="line_mark_neg" type="box" size="0.05 0.15 0.001" pos="-11.885 0 0.002" rgba="0.95 0.95 0.95 1" contype="0" conaffinity="0"/>
+    <geom name="line_sideline_d_pos" type="box" size="11.885 0.025 0.001" pos="0 5.485 0.001" rgba="0.95 0.95 0.95 1" contype="0" conaffinity="0"/>
+    <geom name="line_sideline_d_neg" type="box" size="11.885 0.025 0.001" pos="0 -5.485 0.001" rgba="0.95 0.95 0.95 1" contype="0" conaffinity="0"/>
+    <geom name="line_sideline_s_pos" type="box" size="11.885 0.025 0.001" pos="0 4.115 0.001" rgba="0.95 0.95 0.95 1" contype="0" conaffinity="0"/>
+    <geom name="line_sideline_s_neg" type="box" size="11.885 0.025 0.001" pos="0 -4.115 0.001" rgba="0.95 0.95 0.95 1" contype="0" conaffinity="0"/>
+    <geom name="line_baseline_pos" type="box" size="0.025 5.485 0.001" pos="11.885 0 0.001" rgba="0.95 0.95 0.95 1" contype="0" conaffinity="0"/>
+    <geom name="line_baseline_neg" type="box" size="0.025 5.485 0.001" pos="-11.885 0 0.001" rgba="0.95 0.95 0.95 1" contype="0" conaffinity="0"/>
+    <geom name="line_service_pos" type="box" size="0.025 5.485 0.001" pos="6.4 0 0.001" rgba="0.95 0.95 0.95 1" contype="0" conaffinity="0"/>
+    <geom name="line_service_neg" type="box" size="0.025 5.485 0.001" pos="-6.4 0 0.001" rgba="0.95 0.95 0.95 1" contype="0" conaffinity="0"/>
+    <geom name="line_centre" type="box" size="6.4 0.025 0.001" pos="0 0 0.001" rgba="0.95 0.95 0.95 1" contype="0" conaffinity="0"/>
+    <geom name="line_mark_pos" type="box" size="0.05 0.025 0.001" pos="11.81 0 0.001" rgba="0.95 0.95 0.95 1" contype="0" conaffinity="0"/>
+    <geom name="line_mark_neg" type="box" size="0.05 0.025 0.001" pos="-11.81 0 0.001" rgba="0.95 0.95 0.95 1" contype="0" conaffinity="0"/>
     <body name="base" pos="-11.885 0.000 0.1560" quat="0.707107 0 0 0.707107">
       <freejoint name="base_free"/>
       <inertial pos="0 0 0.120" mass="16.0000" diaginertia="0.538133 0.6 0.898133"/>

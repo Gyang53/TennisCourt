@@ -160,8 +160,11 @@ def main(out_path, court=None):
             a(f'    <geom name="net_post_{"p" if sy > 0 else "n"}" type="capsule"'
               f' size="0.02 {NET_H / 2}" pos="0 {sy * NET_HALF_Y:.3f} {NET_H / 2}"'
               ' rgba="0.15 0.15 0.16 1" contype="32" conaffinity="2"/>')
-        # court lines (visual only), standard layout
-        lw, lz = 0.05, 0.002
+        # court lines (visual only). ITF Rule 1: lines 5 cm wide, the centre mark
+        # 10 cm x 5 cm drawn inside the court, perpendicular to and touching the
+        # baseline. MJCF box sizes are half-extents, so the line half-width is LW/2.
+        LW, lz = 0.05, 0.001
+        lw = LW / 2
         cx, cy = COURT_HALF
         singles_y = 4.115
         service_x = 6.40
@@ -175,8 +178,8 @@ def main(out_path, court=None):
             ("line_service_pos", (lw, cy, 0.001), (service_x, 0.0, lz)),
             ("line_service_neg", (lw, cy, 0.001), (-service_x, 0.0, lz)),
             ("line_centre", (service_x, lw, 0.001), (0.0, 0.0, lz)),
-            ("line_mark_pos", (lw, 0.15, 0.001), (cx, 0.0, lz)),
-            ("line_mark_neg", (lw, 0.15, 0.001), (-cx, 0.0, lz)),
+            ("line_mark_pos", (0.05, 0.025, 0.001), (cx - lw - 0.05, 0.0, lz)),
+            ("line_mark_neg", (0.05, 0.025, 0.001), (-cx + lw + 0.05, 0.0, lz)),
         ):
             a(f'    <geom name="{name}" type="box" size="{fmt(size)}" pos="{fmt(pos)}"'
               ' rgba="0.95 0.95 0.95 1" contype="0" conaffinity="0"/>')
