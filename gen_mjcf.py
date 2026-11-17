@@ -24,12 +24,17 @@ SCALE = 2.0                      # URDF -> RallyCourt robot size
 G = 9.81
 
 # deck + net (synthetic, in scaled metres)
-DECK_HALF = (0.275, 0.275, 0.01)
+CAGE_S = 0.8                     # top cage scaled to 0.8 (as edited in Blender)
+DECK_HALF = (0.275, 0.275, 0.01 * CAGE_S)   # deck plan size unchanged, thickness x0.8
 DECK_Z = 0.107                   # deck plate sits on the URDF base plate
-NET_HALF = 0.26
-NET_WALL_H = 0.45
-POST_H = 0.70
-LIP_H = 0.20
+DECK_TOP = DECK_Z + DECK_HALF[2]
+NET_HALF = 0.26 * CAGE_S         # cage half width (plan)
+NET_WALL_H = 0.45 * CAGE_S       # wall height
+LIP_H = 0.20 * CAGE_S            # front lip height
+WALL_T = 0.03 * CAGE_S           # wall half thickness
+POST_R = 0.01 * CAGE_S           # post radius
+POST_BASE_Z = 0.015              # chassis top: posts come down onto the mecanum chassis
+POST_TOP_Z = DECK_TOP + NET_WALL_H
 MASS_DECK = 6.0
 ROLLER_MASS = 0.1        # per roller
 WHEEL_HUB_MASS = 0.3     # hub, so hub + 9 rollers = 1.2 kg per wheel
@@ -215,24 +220,25 @@ def main(out_path, court=None):
     # deck + net cage (synthetic)
     a(f'      <geom name="deck" type="box" size="{fmt(DECK_HALF)}" pos="0 0 {DECK_Z:.3f}"'
       ' rgba="0.85 0.85 0.88 1" contype="16" conaffinity="1"/>')
-    top = DECK_Z + DECK_HALF[2] + NET_WALL_H / 2
+    top = DECK_TOP + NET_WALL_H / 2
     # wheels roll along X, so the cage opening faces -Y: opening perpendicular to
     # the mecanum travel direction (robot drives sideways toward the court net)
     for name, pos, size in (
-        ("net_wall_py", (0.0, NET_HALF, top), (NET_HALF, 0.03, NET_WALL_H / 2)),
-        ("net_wall_px", (NET_HALF, 0.0, top), (0.03, NET_HALF, NET_WALL_H / 2)),
-        ("net_wall_nx", (-NET_HALF, 0.0, top), (0.03, NET_HALF, NET_WALL_H / 2)),
+        ("net_wall_py", (0.0, NET_HALF, top), (NET_HALF, WALL_T, NET_WALL_H / 2)),
+        ("net_wall_px", (NET_HALF, 0.0, top), (WALL_T, NET_HALF, NET_WALL_H / 2)),
+        ("net_wall_nx", (-NET_HALF, 0.0, top), (WALL_T, NET_HALF, NET_WALL_H / 2)),
     ):
         a(f'      <geom name="{name}" type="box" size="{fmt(size)}" pos="{fmt(pos)}"'
           ' rgba="0.42 0.45 0.50 0.55" contype="16" conaffinity="1"/>')
-    a(f'      <geom name="net_lip" type="box" size="{NET_HALF:.3f} 0.03 {LIP_H/2:.3f}"'
-      f' pos="0 {-NET_HALF:.3f} {DECK_Z + DECK_HALF[2] + LIP_H/2:.3f}" rgba="0.42 0.45 0.50 0.55"'
+    a(f'      <geom name="net_lip" type="box" size="{NET_HALF:.3f} {WALL_T:.3f} {LIP_H/2:.3f}"'
+      f' pos="0 {-NET_HALF:.3f} {DECK_TOP + LIP_H/2:.3f}" rgba="0.42 0.45 0.50 0.55"'
       ' contype="16" conaffinity="1"/>')
     for sx in (-1, 1):
         for sy in (-1, 1):
             a(f'      <geom name="post_{"p" if sx>0 else "n"}x{"p" if sy>0 else "n"}y" type="capsule"'
-              f' size="0.01 {POST_H/2:.3f}" pos="{sx*(NET_HALF-0.01):.3f} {sy*(NET_HALF-0.01):.3f}'
-              f' {DECK_Z + DECK_HALF[2] + POST_H/2:.3f}" rgba="0.9 0.9 0.92 1"'
+              f' size="{POST_R:.3f} {(POST_TOP_Z - POST_BASE_Z) / 2:.3f}"'
+              f' pos="{sx*(NET_HALF-POST_R):.3f} {sy*(NET_HALF-POST_R):.3f}'
+              f' {(POST_TOP_Z + POST_BASE_Z) / 2:.3f}" rgba="0.9 0.9 0.92 1"'
               ' contype="16" conaffinity="1"/>')
 
     roller_links = [n for n in links if "roller" in n]
