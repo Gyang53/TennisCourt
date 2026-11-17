@@ -331,12 +331,14 @@ def main(out_path, court=None):
     a('    <gyro site="imu" name="imu_gyro"/>')
     a('    <frameangvel objtype="site" objname="imu" name="imu_angvel_world"/>')
     a('  </sensor>')
-    # the ball needs a real bounce; the default critically damped contact absorbs it.
-    # 1.5 ms = 3 physics steps, dampratio 0.3 -> COR ~0.63 from 10 to 20 m/s
+    # ball/floor contact: pinned to a damped, non-bouncing surface (the engine's
+    # soft contact cannot give a repeatable restitution at 0.5 ms - the contact
+    # lasts ~3 steps, so COR swung 0.1-0.6 with impact phase).  The bounce is an
+    # explicit impulse in ros2_bridge.py instead, see Bridge._bounce.
     if court:
         a('  <contact>')
         a('    <pair geom1="ball" geom2="ground_col" condim="3" friction="0.8 0.01 0.001"'
-          ' solref="0.0015 0.3"/>')
+          ' solref="0.002 1.0"/>')
         a('  </contact>')
     a('</mujoco>')
     xml = "\n".join(L) + "\n"

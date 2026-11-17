@@ -457,6 +457,6 @@
     <frameangvel objtype="site" objname="imu" name="imu_angvel_world"/>
   </sensor>
   <contact>
-    <pair geom1="ball" geom2="ground_col" condim="3" friction="0.8 0.01 0.001" solref="0.0015 0.3"/>
+    <pair geom1="ball" geom2="ground_col" condim="3" friction="0.8 0.01 0.001" solref="0.002 1.0"/>
   </contact>
 </mujoco>

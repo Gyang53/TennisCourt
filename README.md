@@ -90,16 +90,25 @@ ros2 service call /rally/serve std_srvs/srv/Trigger
 ```
 
 Speed and clearance are coupled by the geometry: with the toss 2.0-2.6 m high, a 20 m/s serve
-must be lofted 6-9 deg to stay inside the service box, which puts it 0.5-0.9 m over the net.
-Slower serves clear more easily (16 m/s: 0.5-1.0 m); faster than ~24 m/s cannot both clear
-the net and land inside the service box, and the service returns `success=False` with the
-reason instead of spawning something illegal. Verified in the engine: eight serves at
-20 m/s landed in the box with 0.52-0.92 m clearance, bounce apex 0.43-1.08 m.
+must be lofted 6-9 deg to stay inside the service box, so a big clearance forces a steeper,
+slower arc. The elevation is bisected on the *aimed* flight, so the requested clearance is
+hit to within 0.01 m (20 m/s: 0.45 -> 0.44, 0.80 -> 0.79); a clearance that would push the
+bounce past the service line (e.g. 1.6 m at 20 m/s) is rejected with `success=False` instead
+of spawning something illegal.
 
-The bridge applies the same quadratic drag to the ball every step (the MJCF has no fluid
-model). The ball bounces off the court with COR ~0.6 (contact pair `ball`/`ground_col`,
-`solref="0.0015 0.3"`), which is why the model runs at `timestep="0.0005"`: at 2 ms a
-20 m/s ball moves 50 mm per step, more than its 33.5 mm radius, and tunnels through the court.
+Ball physics the engine does not do for us, all in `ros2_bridge.py`:
+
+* **drag** - quadratic, rho 1.2 / Cd 0.6 / m 0.057 kg, applied every step and inside the
+  serve solver so the two agree.
+* **bounce** - the ball/floor contact pair in the MJCF is *critically damped on purpose*
+  (`solref="0.002 1.0"`): the engine's soft contact lasts ~3 steps at 0.5 ms, so the
+  restitution it produced swung between 0.1 and 0.6 depending on the impact phase. The
+  bounce is now an explicit impulse, `COR = clip(0.83 - 0.010*v_normal, 0.45, 0.78)`,
+  horizontal speed kept at 90 %, and the ball leaves with rolling spin. Checked against the
+  ITF rebound test: a 2.54 m drop rebounds 1.35 m (standard 1.35-1.47 m), serve bounces
+  apex 1.1-1.5 m.
+* **why 0.5 ms** - at 2 ms a 20 m/s ball moves 50 mm per step, more than its 33.5 mm radius,
+  and tunnels through the court.
 
 Not implemented: the `/mecanum/goal` point controller — this bridge only takes velocity
 commands. The wheel feedforward gains were measured on this model

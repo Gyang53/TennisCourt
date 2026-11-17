@@ -90,6 +90,17 @@ GRAV = np.array([0.0, 0.0, -9.81])
 DRAG_K = 0.5 * 1.2 * 0.6 * math.pi * BALL_R ** 2 / 0.057
 
 
+# tennis ball on a hard court: COR 0.73 at the ITF rebound-test impact (7 m/s),
+# ~0.55 at a 100 km/h serve.  Modelled as COR = 0.80 - 0.010 * v_normal,
+# clamped; the engine's own contact is critically damped and does not bounce.
+COR_A, COR_B, COR_MIN, COR_MAX = 0.83, 0.010, 0.45, 0.78
+TANGENT_LOSS = 0.90              # horizontal speed kept through the bounce
+
+
+def bounce_cor(v_normal: float) -> float:
+    return float(np.clip(COR_A - COR_B * abs(v_normal), COR_MIN, COR_MAX))
+
+
 def fly_step(p, v, h):
     """One explicit step of the drag-affected flight."""
     speed = float(np.linalg.norm(v))
@@ -125,49 +136,52 @@ def _launch(speed, azimuth, elevation):
                      speed * math.sin(elevation)])
 
 
-def solve_speed(spawn, target, speed, elevation=0.15):
-    """Launch velocity of magnitude `speed` that lands on `target` (xy)."""
-    azimuth = 0.0
-    for _ in range(6):
-        land, _ = flight(spawn, _launch(speed, azimuth, elevation))
-        if land is None:
-            return None
-        err = land - target[:2]
-        if np.linalg.norm(err) < 5e-3:
-            break
-        J = np.empty((2, 2))
-        for i, (da, de) in enumerate(((1e-3, 0.0), (0.0, 1e-3))):
-            land_i, _ = flight(spawn, _launch(speed, azimuth + da, elevation + de))
-            J[:, i] = (land_i - land) / 1e-3
-        step = np.linalg.solve(J, err)
-        azimuth -= step[0]
-        elevation -= step[1]
-    return _launch(speed, azimuth, elevation)
+def clearance_at(spawn, speed, elevation_deg, azimuth=0.0, dt=0.001):
+    """(landing xy, net clearance) of a serve launched at that elevation/azimuth."""
+    return flight(spawn, _launch(speed, azimuth, math.radians(elevation_deg)), dt=dt)
 
 
-def plan_serve(rng, spawn, speed, clearance_min, clearance_spread=0.35):
-    """A legal serve at the requested speed and minimum net clearance.
+def plan_serve(rng, spawn, speed, clearance, spread=0.0):
+    """A legal serve at the requested speed and net clearance.
 
-    Returns (v0, target, clearance) or (None, reason, None) if the speed and
-    geometry cannot produce a legal serve from this spawn.
+    The elevation is bisected so the aimed flight clears the net by the
+    requested amount while the bounce stays inside the diagonal receiving
+    service box; the azimuth comes from the straight (drag has no lateral
+    component) horizontal path to a random legal bounce point.
+    Returns (v0, target, clearance) or (None, reason, None).
     """
-    want = clearance_min + rng.uniform(0.0, clearance_spread)
-    scan = []
-    for elev_deg in np.arange(1.0, 40.0, 0.5):
-        land, clear = flight(spawn, _launch(speed, 0.0, math.radians(elev_deg)), dt=0.002)
-        if land is not None and clear is not None:
-            scan.append((clear, land[0], elev_deg))
-    legal = [c for c in scan if c[0] >= clearance_min and -SERVICE_X + 0.4 < c[1] < -0.8]
-    if not legal:
-        return None, (f"speed {speed:.1f} m/s cannot clear the net by {clearance_min:.2f} m "
-                      f"and bounce inside the service box"), None
-    clear_t, x_land, elev_deg = min(legal, key=lambda c: abs(c[0] - want))
+    want = clearance + (rng.uniform(0.0, spread) if spread else 0.0)
     side = 1.0 if spawn[1] >= 0.0 else -1.0
-    target = np.array([x_land, -side * rng.uniform(0.5, 3.6), BALL_R])
-    v0 = solve_speed(spawn, target, speed, math.radians(elev_deg))
-    if v0 is None:
-        return None, "no launch solution for that speed", None
-    _, clear = flight(spawn, v0)
+    y_land = -side * rng.uniform(0.5, 3.6)
+    azimuth = 0.0
+    elev = 15.0
+    land = clear = None
+    for _ in range(3):                       # aim, then refine the aim with the depth it gives
+        # clearance grows with elevation, so bisect on it alone and check the
+        # resulting depth afterwards (a steeper arc lands deeper)
+        lo, hi = 1.0, 45.0
+        for _ in range(16):
+            mid = 0.5 * (lo + hi)
+            _, clear_m = clearance_at(spawn, speed, mid, azimuth)
+            if clear_m is not None and clear_m >= want:
+                hi = mid
+            else:
+                lo = mid
+        elev = hi
+        land, clear = clearance_at(spawn, speed, elev, azimuth, dt=0.0005)
+        if land is None or clear is None:
+            return None, f"speed {speed:.1f} m/s never clears the net", None
+        if not (-SERVICE_X + 0.4 < land[0] < -0.8):
+            return None, (f"speed {speed:.1f} m/s with {clearance:.2f} m net clearance bounces at "
+                          f"x={land[0]:.2f}, outside the service box"), None
+        azimuth = math.atan2(y_land - spawn[1], spawn[0] - land[0])
+    v0 = _launch(speed, azimuth, math.radians(elev))
+    land, clear = flight(spawn, v0)
+    if land is None or clear is None:
+        return None, "no flight solution", None
+    if abs(land[1]) >= SINGLES_Y:
+        return None, f"aimed bounce y={land[1]:.2f} is outside the singles line", None
+    target = np.array([land[0], land[1], BALL_R])
     return v0, target, clear
 
 
@@ -242,6 +256,7 @@ class Bridge:
         self.ball = model.get_body("ball")
         self.ball_fb = next(f for f in model.floating_bases if f.name == "ball_free")
         self.rng = random.Random()
+        self.last_bounce = -1e9
         node.declare_parameter("serve_speed", 20.0)        # m/s at launch
         node.declare_parameter("serve_clearance", 0.45)    # m over the net box
         self.srv_serve = node.create_service(Trigger, "/rally/serve", self.on_serve)
@@ -266,6 +281,7 @@ class Bridge:
         self.R_start = quat_to_mat(pose[3:7])
         self.cmd = np.zeros(3)
         self.cmd_time = -1e9
+        self.last_bounce = -1e9
 
     def on_wheel(self, msg: Float64MultiArray) -> None:
         """Raw wheel speed targets [rad/s] (FL, FR, RL, RR); takes over from cmd_vel."""
@@ -318,6 +334,25 @@ class Bridge:
                       f"target ({target[0]:.2f}, {target[1]:.2f}) "
                       f"speed {np.linalg.norm(v0):.1f} m/s clearance {clear:.2f} m")
 
+    def _bounce(self) -> None:
+        """Restitution impulse when the ball lands on the court.
+
+        The engine's contact is critically damped (see gen_mjcf.py), so the
+        bounce is applied here: the normal velocity is reflected with the
+        speed-dependent COR, the horizontal velocity loses TANGENT_LOSS, and the
+        ball leaves with the spin of a rolling bounce.
+        """
+        p = self.ball_fb.get_translation(self.d)
+        v = self.ball_fb.get_global_linear_velocity(self.d)
+        if v[2] >= 0.0 or p[2] > BALL_R + 0.002 or (self.t - self.last_bounce) < 0.02:
+            return
+        vn = -float(v[2])
+        out = np.array([v[0] * TANGENT_LOSS, v[1] * TANGENT_LOSS, vn * bounce_cor(vn)])
+        self.ball_fb.set_global_linear_velocity(self.d, out.astype(np.float32))
+        self.ball_fb.set_global_angular_velocity(
+            self.d, np.array([-out[1] / BALL_R, out[0] / BALL_R, 0.0], np.float32))
+        self.last_bounce = self.t
+
     def _drag(self) -> None:
         """Quadratic air drag on the ball (the MJCF has no fluid model)."""
         v = self.ball_fb.get_global_linear_velocity(self.d)
@@ -343,6 +378,7 @@ class Bridge:
         if control:
             self.control()
         self._drag()
+        self._bounce()
         self.m.step(self.d)
         self.t += self.dt
 
