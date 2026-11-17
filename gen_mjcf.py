@@ -189,8 +189,9 @@ def main(out_path, court=None):
             ("line_sideline_s_neg", (cx, lw, 0.001), (0.0, -singles_y, lz)),
             ("line_baseline_pos", (lw, cy, 0.001), (cx, 0.0, lz)),
             ("line_baseline_neg", (lw, cy, 0.001), (-cx, 0.0, lz)),
-            ("line_service_pos", (lw, cy, 0.001), (service_x, 0.0, lz)),
-            ("line_service_neg", (lw, cy, 0.001), (-service_x, 0.0, lz)),
+            # ITF Rule 1: the service lines are drawn between the singles sidelines
+            ("line_service_pos", (lw, singles_y, 0.001), (service_x, 0.0, lz)),
+            ("line_service_neg", (lw, singles_y, 0.001), (-service_x, 0.0, lz)),
             ("line_centre", (service_x, lw, 0.001), (0.0, 0.0, lz)),
             ("line_mark_pos", (0.05, 0.025, 0.001), (cx - lw - 0.05, 0.0, lz)),
             ("line_mark_neg", (0.05, 0.025, 0.001), (-cx + lw + 0.05, 0.0, lz)),
