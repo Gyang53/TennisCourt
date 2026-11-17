@@ -96,66 +96,81 @@ def fly_step(p, v, h):
     return p + v * h, v + (GRAV - DRAG_K * speed * v) * h
 
 
-def fly(p, v, duration, steps=400):
-    h = duration / steps
-    for _ in range(steps):
-        p, v = fly_step(p, v, h)
-    return p, v
+def flight(p0, v0, dt=0.0005, max_t=3.0):
+    """Fly ballistically (drag included).  Returns (landing xy, net clearance).
 
-
-def solve_launch(spawn, target, tf):
-    """Launch velocity that carries the ball from spawn to target in exactly tf s."""
-    v = (target - spawn) / tf - 0.5 * GRAV * tf
-    for _ in range(6):
-        p, _ = fly(spawn, v, tf, 400)
-        err = p - target
-        if np.linalg.norm(err) < 2e-3:
-            break
-        J = np.empty((3, 3))
-        for i in range(3):
-            dv = np.zeros(3)
-            dv[i] = 1e-2
-            J[:, i] = (fly(spawn, v + dv, tf, 400)[0] - p) / 1e-2
-        v = v - np.linalg.solve(J, err)
-    return v
-
-
-def net_clearance(spawn, v, duration):
-    """Ball surface clearance over the net box at x = 0 (None if it never crosses)."""
-    h = 0.002
-    p, vv = np.array(spawn, float), np.array(v, float)
-    t, clear = 0.0, None
-    while t < duration:
+    Landing is the first floor touch; clearance is the ball surface height over
+    the net box at x = 0 (None if the flight never crosses the net).
+    """
+    p, v = np.array(p0, float), np.array(v0, float)
+    clear = None
+    t = 0.0
+    while t < max_t:
         prev = p
-        p, vv = fly_step(p, vv, h)
-        t += h
-        if prev[0] > 0.0 >= p[0] and p[0] != prev[0]:
+        p, v = fly_step(p, v, dt)
+        t += dt
+        if clear is None and prev[0] > 0.0 >= p[0] and p[0] != prev[0]:
             u = (0.0 - prev[0]) / (p[0] - prev[0])
             clear = float(prev[2] + u * (p[2] - prev[2])) - NET_TOP - BALL_R
-    return clear
+        if p[2] <= BALL_R and v[2] < 0.0:
+            return p[:2].copy(), clear
+    return None, clear
 
 
-def random_serve(rng):
-    """A legal serve: from behind the opposite baseline, diagonally into the
-    receiving service box, over the net.  Returns (spawn, velocity, target, tf)."""
-    side = 1.0 if rng.random() < 0.5 else -1.0
-    spawn = np.array([COURT_X + rng.uniform(0.2, 1.4),      # behind the baseline
-                      side * rng.uniform(0.3, 3.8),        # between centre mark and singles line
-                      rng.uniform(2.0, 2.6)])              # racket contact height
-    target = np.array([-rng.uniform(1.2, 5.6),              # inside the service line
-                       -side * rng.uniform(0.5, 3.6),       # diagonally opposite, inside singles
-                       BALL_R])
-    tf = rng.uniform(0.62, 0.90)
-    v = solve_launch(spawn, target, tf)
-    clear = net_clearance(spawn, v, tf)
-    while clear is not None and clear < 0.10 and tf < 1.6:  # too flat: arc it higher
-        tf += 0.06
-        v = solve_launch(spawn, target, tf)
-        clear = net_clearance(spawn, v, tf)
-    return spawn, v, target, tf
+def _launch(speed, azimuth, elevation):
+    """Launch velocity of magnitude `speed`; azimuth is measured from the -X
+    axis (the direction the serve travels) toward +Y."""
+    return np.array([-speed * math.cos(elevation) * math.cos(azimuth),
+                     speed * math.cos(elevation) * math.sin(azimuth),
+                     speed * math.sin(elevation)])
 
 
-# --------------------------------------------------------------------- quats
+def solve_speed(spawn, target, speed, elevation=0.15):
+    """Launch velocity of magnitude `speed` that lands on `target` (xy)."""
+    azimuth = 0.0
+    for _ in range(6):
+        land, _ = flight(spawn, _launch(speed, azimuth, elevation))
+        if land is None:
+            return None
+        err = land - target[:2]
+        if np.linalg.norm(err) < 5e-3:
+            break
+        J = np.empty((2, 2))
+        for i, (da, de) in enumerate(((1e-3, 0.0), (0.0, 1e-3))):
+            land_i, _ = flight(spawn, _launch(speed, azimuth + da, elevation + de))
+            J[:, i] = (land_i - land) / 1e-3
+        step = np.linalg.solve(J, err)
+        azimuth -= step[0]
+        elevation -= step[1]
+    return _launch(speed, azimuth, elevation)
+
+
+def plan_serve(rng, spawn, speed, clearance_min, clearance_spread=0.35):
+    """A legal serve at the requested speed and minimum net clearance.
+
+    Returns (v0, target, clearance) or (None, reason, None) if the speed and
+    geometry cannot produce a legal serve from this spawn.
+    """
+    want = clearance_min + rng.uniform(0.0, clearance_spread)
+    scan = []
+    for elev_deg in np.arange(1.0, 40.0, 0.5):
+        land, clear = flight(spawn, _launch(speed, 0.0, math.radians(elev_deg)), dt=0.002)
+        if land is not None and clear is not None:
+            scan.append((clear, land[0], elev_deg))
+    legal = [c for c in scan if c[0] >= clearance_min and -SERVICE_X + 0.4 < c[1] < -0.8]
+    if not legal:
+        return None, (f"speed {speed:.1f} m/s cannot clear the net by {clearance_min:.2f} m "
+                      f"and bounce inside the service box"), None
+    clear_t, x_land, elev_deg = min(legal, key=lambda c: abs(c[0] - want))
+    side = 1.0 if spawn[1] >= 0.0 else -1.0
+    target = np.array([x_land, -side * rng.uniform(0.5, 3.6), BALL_R])
+    v0 = solve_speed(spawn, target, speed, math.radians(elev_deg))
+    if v0 is None:
+        return None, "no launch solution for that speed", None
+    _, clear = flight(spawn, v0)
+    return v0, target, clear
+
+
 def quat_to_mat(q) -> np.ndarray:
     i, j, k, w = (float(v) for v in q)
     return np.array([
@@ -223,9 +238,12 @@ class Bridge:
         self.cmd_time = -1e9
         self.wheel_cmd = np.zeros(4)        # wheel rad/s, FL FR RL RR
         self.wheel_time = -1e9
+        self.log = node.get_logger()
         self.ball = model.get_body("ball")
         self.ball_fb = next(f for f in model.floating_bases if f.name == "ball_free")
         self.rng = random.Random()
+        node.declare_parameter("serve_speed", 20.0)        # m/s at launch
+        node.declare_parameter("serve_clearance", 0.45)    # m over the net box
         self.srv_serve = node.create_service(Trigger, "/rally/serve", self.on_serve)
         self.t = 0.0
         self.v_cmd = np.zeros(3)
@@ -262,24 +280,43 @@ class Bridge:
         self.cmd_time = self.t
 
     def on_serve(self, request, response):
-        spawn, v, target, tf = self.serve()
-        msg = (f"spawn ({spawn[0]:.2f}, {spawn[1]:.2f}, {spawn[2]:.2f}) -> "
-               f"target ({target[0]:.2f}, {target[1]:.2f}) v {np.round(v, 2)} tf {tf:.2f}s")
-        self.node.get_logger().info(f"serve: {msg}")
-        response.success = True
+        try:
+            ok, msg = self.serve()
+        except Exception as exc:            # never let a bad request kill the sim
+            ok, msg = False, f"serve failed: {exc!r}"
+        if ok:
+            self.log.info(f"serve: {msg}")
+        else:
+            self.log.warning(f"serve: {msg}")
+        response.success = ok
         response.message = msg
         return response
 
-    def serve(self, seed: int | None = None):
-        """Spawn one legal serve from the opposite half and start it flying."""
+    def spawn_point(self, rng) -> np.ndarray:
+        """Random ball toss behind the opposite baseline, between centre mark
+        and the singles sideline (where a server is allowed to stand)."""
+        side = 1.0 if rng.random() < 0.5 else -1.0
+        return np.array([COURT_X + rng.uniform(0.2, 1.4),
+                         side * rng.uniform(0.3, 3.8),
+                         rng.uniform(2.0, 2.6)])
+
+    def serve(self, seed: int | None = None) -> tuple[bool, str]:
+        """Spawn one legal serve at the configured speed and clearance."""
         rng = random.Random(seed) if seed is not None else self.rng
-        spawn, v, target, tf = random_serve(rng)
+        speed = float(self.node.get_parameter("serve_speed").value)
+        clearance = float(self.node.get_parameter("serve_clearance").value)
+        spawn = self.spawn_point(rng)
+        v0, target, clear = plan_serve(rng, spawn, speed, clearance)
+        if v0 is None:
+            return False, str(target)
         self.ball_fb.set_translation(self.d, spawn.astype(np.float32))
         self.ball_fb.set_rotation(self.d, np.array([1.0, 0.0, 0.0, 0.0], np.float32))
-        self.ball_fb.set_global_linear_velocity(self.d, v.astype(np.float32))
+        self.ball_fb.set_global_linear_velocity(self.d, v0.astype(np.float32))
         self.ball_fb.set_global_angular_velocity(self.d, np.zeros(3, np.float32))
         self.m.forward_kinematic(self.d)
-        return spawn, v, target, tf
+        return True, (f"spawn ({spawn[0]:.2f}, {spawn[1]:.2f}, {spawn[2]:.2f}) -> "
+                      f"target ({target[0]:.2f}, {target[1]:.2f}) "
+                      f"speed {np.linalg.norm(v0):.1f} m/s clearance {clear:.2f} m")
 
     def _drag(self) -> None:
         """Quadratic air drag on the ball (the MJCF has no fluid model)."""

@@ -78,13 +78,28 @@ yaw 0.18613 rad/s per wheel rad/s).
 ros2 service call /rally/serve std_srvs/srv/Trigger
 ```
 
-The serve solves a drag-affected launch (rho 1.2, Cd 0.6, m 0.057 kg) that passes through a
-random legal bounce point in `tf` seconds, arcing it higher until it clears the net box by
-10 cm; measured landing error 3-4 cm over ten serves. The bridge applies the same quadratic
-drag to the ball every step (the MJCF has no fluid model). The ball bounces off the court
-with COR ~0.6 (contact pair `ball`/`ground_col`, `solref="0.0015 0.3"`), which is why the
-model runs at `timestep="0.0005"`: at 2 ms a 20 m/s ball moves 50 mm per step, more than its
-33.5 mm radius, and tunnels through the court.
+The serve solves a drag-affected launch (rho 1.2, Cd 0.6, m 0.057 kg) whose first bounce
+lands in the diagonal receiving service box, inside the singles lines. Two node parameters
+shape it (pass floats, `18`, not `18.0`, is rejected by `ros2 param set`):
+
+```bash
+ros2 param set /mecanum_drive serve_speed 18.0       # m/s at launch (default 20.0)
+ros2 param set /mecanum_drive serve_clearance 0.5    # m over the net box (default 0.45)
+ros2 service call /rally/serve std_srvs/srv/Trigger
+# success=True, message='spawn (...) -> target (...) speed 18.0 m/s clearance 0.71 m'
+```
+
+Speed and clearance are coupled by the geometry: with the toss 2.0-2.6 m high, a 20 m/s serve
+must be lofted 6-9 deg to stay inside the service box, which puts it 0.5-0.9 m over the net.
+Slower serves clear more easily (16 m/s: 0.5-1.0 m); faster than ~24 m/s cannot both clear
+the net and land inside the service box, and the service returns `success=False` with the
+reason instead of spawning something illegal. Verified in the engine: eight serves at
+20 m/s landed in the box with 0.52-0.92 m clearance, bounce apex 0.43-1.08 m.
+
+The bridge applies the same quadratic drag to the ball every step (the MJCF has no fluid
+model). The ball bounces off the court with COR ~0.6 (contact pair `ball`/`ground_col`,
+`solref="0.0015 0.3"`), which is why the model runs at `timestep="0.0005"`: at 2 ms a
+20 m/s ball moves 50 mm per step, more than its 33.5 mm radius, and tunnels through the court.
 
 Not implemented: the `/mecanum/goal` point controller — this bridge only takes velocity
 commands. The wheel feedforward gains were measured on this model
