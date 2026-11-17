@@ -16,6 +16,7 @@
     <geom name="floor" type="plane" size="0 0 0.05" rgba="0.18 0.35 0.22 1" condim="3" friction="1.2 0.01 0.001" contype="1" conaffinity="5"/>
     <body name="base" pos="0.000 0.000 0.1560" quat="1 0 0 0">
       <freejoint name="base_free"/>
+      <site name="imu" pos="0 0 0" size="0.01" rgba="1 0.4 0 1" group="4"/>
       <inertial pos="0 0 0.120" mass="16.0000" diaginertia="0.538133 0.6 0.898133"/>
       <geom name="base_vis" type="mesh" mesh="base" quat="1 0 0 0" mass="0" contype="0" conaffinity="0" rgba="0.78 0.79 0.82 1"/>
       <geom name="base_col" type="box" size="0.3000 0.2800 0.0600" pos="0 0 -0.0460" mass="0" rgba="0.7 0.7 0.72 1" contype="8" conaffinity="1" group="3"/>
@@ -426,5 +427,8 @@
     <framepos objtype="body" objname="base" name="base_pos"/>
     <framequat objtype="body" objname="base" name="base_quat"/>
     <framelinvel objtype="body" objname="base" name="base_linvel"/>
+    <accelerometer site="imu" name="imu_acc"/>
+    <gyro site="imu" name="imu_gyro"/>
+    <frameangvel objtype="site" objname="imu" name="imu_angvel_world"/>
   </sensor>
 </mujoco>

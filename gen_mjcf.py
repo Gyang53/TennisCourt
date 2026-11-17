@@ -217,6 +217,7 @@ def main(out_path, court=None):
     a(f'    <body name="base" pos="{robot_start[0]:.3f} {robot_start[1]:.3f} {base_z:.4f}"'
       f' quat="{fmt(q_body)}">')
     a('      <freejoint name="base_free"/>')
+    a('      <site name="imu" pos="0 0 0" size="0.01" rgba="1 0.4 0 1" group="4"/>')
     b = links["base_link"]
     m_base = b["mass"] * SCALE ** 3
     bw, bh, bd = 0.30 * SCALE, 0.28 * SCALE, 0.30            # plate + deck envelope
@@ -324,6 +325,9 @@ def main(out_path, court=None):
     a('    <framepos objtype="body" objname="base" name="base_pos"/>')
     a('    <framequat objtype="body" objname="base" name="base_quat"/>')
     a('    <framelinvel objtype="body" objname="base" name="base_linvel"/>')
+    a('    <accelerometer site="imu" name="imu_acc"/>')
+    a('    <gyro site="imu" name="imu_gyro"/>')
+    a('    <frameangvel objtype="site" objname="imu" name="imu_angvel_world"/>')
     a('  </sensor>')
     a('</mujoco>')
     xml = "\n".join(L) + "\n"

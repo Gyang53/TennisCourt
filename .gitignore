@@ -11,3 +11,4 @@ render.py
 render_court.py
 test_sim.py
 test_motion.py
+.venv/

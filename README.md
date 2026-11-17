@@ -29,6 +29,47 @@ the catch-cage opening (facing `+X`) is perpendicular to the travel direction.
 * collisions: chassis box, cage (walls/lip/deck/posts), roller sphere chains fitted inside
   the barrel profile, court slab and net box
 
+## ROS2 control and sensors
+
+`ros2_bridge.py` runs the sim and the ROS2 interface in one process, following
+`isaacsim/isaac/RallyCourt/rally_ctrl/MECANUM_SENSORS.md`:
+
+```bash
+source /opt/ros/jazzy/setup.bash
+.venv/bin/python ros2_bridge.py             # viewer window
+.venv/bin/python ros2_bridge.py --headless  # no window
+```
+
+The robot starts at the court origin (baseline centre, world `-11.885, 0`), camera facing
+the net, and holds still until a `cmd_vel` arrives.
+
+| topic | dir | type | meaning |
+|---|---|---|---|
+| `/mecanum/cmd_vel` | sub | `geometry_msgs/Twist` | vehicle frame: `linear.x` forward (camera axis) m/s, `linear.y` left m/s, `angular.z` CCW rad/s; **0.5 s deadman** |
+| `/mecanum/state` | pub | `std_msgs/Float64MultiArray` | `[vx, vy, wz measured, vx, vy, wz commanded]`, vehicle frame, 120 Hz |
+| `/imu/data_raw` | pub | `sensor_msgs/Imu` | 120 Hz, `frame_id=imu_link`, ROS specific-force convention (rest `z = -9.81`) |
+| `/odom` | pub | `nav_msgs/Odometry` | 120 Hz, `odom -> base_link`; pose in the startup frame (+X toward the net, +Y left), twist in `base_link` |
+| `/tf` | pub | `tf2_msgs/TFMessage` | `odom -> base_link`, `base_link -> imu_link` |
+| `/joint_states` | pub | `sensor_msgs/JointState` | the four wheel joints |
+| `/clock` | pub | `rosgraph_msgs/Clock` | simulation time |
+
+```bash
+ros2 topic echo /imu/data_raw --field linear_acceleration
+ros2 topic pub -r 20 /mecanum/cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.4}}"
+ros2 topic pub --once /mecanum/cmd_vel geometry_msgs/msg/Twist "{}"   # stop now
+ros2 topic echo /odom --field pose.pose.position
+```
+
+Frames: `odom` is the startup pose with +X along the camera axis, +Y left, +Z up.
+`base_link` is the MJCF base body (+X left, +Y rearward, camera axis = -Y), so its pose in
+`odom` is yawed +90 deg at rest and `vehicle (forward, left) = base_link (y, -x)`. IMU
+orientation is relative to the startup pose (identity at power-on) expressed in `imu_link`.
+
+Not implemented: the `/mecanum/goal` point controller — this bridge only takes velocity
+commands. The wheel feedforward gains were measured on this model
+(0.09958 m/s, 0.09712 m/s, 0.18613 rad/s per wheel rad/s) and are trimmed against the
+measured body velocity.
+
 ## Cameras
 
 Two mono cameras migrated from the source `RallyCourt.usd` (LeftCam / RightCam):
