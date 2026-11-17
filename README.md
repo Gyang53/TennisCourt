@@ -46,9 +46,10 @@ the net, and holds still until a `cmd_vel` arrives.
 | topic | dir | type | meaning |
 |---|---|---|---|
 | `/mecanum/cmd_vel` | sub | `geometry_msgs/Twist` | vehicle frame: `linear.x` forward (camera axis) m/s, `linear.y` left m/s, `angular.z` CCW rad/s; **0.5 s deadman** |
-| `/mecanum/state` | pub | `std_msgs/Float64MultiArray` | `[vx, vy, wz measured, vx, vy, wz commanded]`, vehicle frame, 120 Hz |
-| `/imu/data_raw` | pub | `sensor_msgs/Imu` | 120 Hz, `frame_id=imu_link`, ROS specific-force convention (rest `z = -9.81`) |
-| `/odom` | pub | `nav_msgs/Odometry` | 120 Hz, `odom -> base_link`; pose in the startup frame (+X toward the net, +Y left), twist in `base_link` |
+| `/mecanum/wheel_cmd` | sub | `std_msgs/Float64MultiArray` | raw wheel speed targets `[FL, FR, RL, RR]` rad/s, bypasses `cmd_vel` while fresh (0.5 s). Reserved for direct wheel control / RL |
+| `/mecanum/state` | pub | `std_msgs/Float64MultiArray` | `[x, y, theta, vx, vy]`, 120 Hz, same numbers as `/odom` but flat |
+| `/imu/data_raw` | pub | `sensor_msgs/Imu` | 6-axis (acc + gyro) at 120 Hz, `frame_id=imu_link`, ROS specific-force convention (rest `z = -9.81`), no orientation (`orientation_covariance[0] = -1`) |
+| `/odom` | pub | `nav_msgs/Odometry` | 120 Hz, `odom -> base_link`; only `x`, `y`, `theta` and `vx`, `vy` are filled |
 | `/tf` | pub | `tf2_msgs/TFMessage` | `odom -> base_link`, `base_link -> imu_link` |
 | `/joint_states` | pub | `sensor_msgs/JointState` | the four wheel joints |
 | `/clock` | pub | `rosgraph_msgs/Clock` | simulation time |
@@ -57,13 +58,20 @@ the net, and holds still until a `cmd_vel` arrives.
 ros2 topic echo /imu/data_raw --field linear_acceleration
 ros2 topic pub -r 20 /mecanum/cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.4}}"
 ros2 topic pub --once /mecanum/cmd_vel geometry_msgs/msg/Twist "{}"   # stop now
-ros2 topic echo /odom --field pose.pose.position
+ros2 topic echo /mecanum/state                                     # x, y, theta, vx, vy
+ros2 topic pub -r 20 /mecanum/wheel_cmd std_msgs/msg/Float64MultiArray "{data: [5.0, 5.0, 5.0, 5.0]}"
 ```
 
-Frames: `odom` is the startup pose with +X along the camera axis, +Y left, +Z up.
-`base_link` is the MJCF base body (+X left, +Y rearward, camera axis = -Y), so its pose in
-`odom` is yawed +90 deg at rest and `vehicle (forward, left) = base_link (y, -x)`. IMU
-orientation is relative to the startup pose (identity at power-on) expressed in `imu_link`.
+Frames: `odom` is the startup pose — origin at the robot, +X along the camera axis (toward
+the net), +Y left, +Z up — so `theta = 0` at power-on. `base_link` is the **vehicle frame**
+(+X forward = camera axis, +Y left, +Z up); the MJCF base body itself is rotated 90 deg from
+it (+X left, +Y rearward), which the bridge folds into the published poses, the odometry and
+the IMU axes, so `vx` is forward speed and `ax` is forward acceleration. `imu_link` is
+coincident with `base_link`.
+
+Wheel targets are wheel angular speed in rad/s, not tread speed: 5 rad/s on all four wheels
+drives the body right at ~0.50 m/s (measured gains: body x 0.09958 m/s, y 0.09712 m/s,
+yaw 0.18613 rad/s per wheel rad/s).
 
 Not implemented: the `/mecanum/goal` point controller — this bridge only takes velocity
 commands. The wheel feedforward gains were measured on this model

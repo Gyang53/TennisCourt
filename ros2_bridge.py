@@ -5,9 +5,11 @@ MotrixSim MJCF, in one process: physics, drive, sensors, publishers.
 
 Topics
 ------
-subscribe  /mecanum/cmd_vel   geometry_msgs/Twist        vehicle frame
-publish    /mecanum/state     std_msgs/Float64MultiArray [vx,vy,wz meas, cmd]
-publish    /imu/data_raw      sensor_msgs/Imu            frame imu_link
+subscribe  /mecanum/cmd_vel    geometry_msgs/Twist        vehicle frame
+subscribe  /mecanum/wheel_cmd  std_msgs/Float64MultiArray 4 wheel targets [rad/s]
+                                                          FL, FR, RL, RR (bypasses cmd_vel)
+publish    /mecanum/state      std_msgs/Float64MultiArray [x, y, theta, vx, vy]
+publish    /imu/data_raw       sensor_msgs/Imu           6-axis, frame imu_link
 publish    /odom              nav_msgs/Odometry          odom -> base_link
 publish    /tf                tf2_msgs/TFMessage         odom->base_link, base_link->imu_link
 publish    /joint_states      sensor_msgs/JointState     four wheel joints
@@ -15,10 +17,12 @@ publish    /clock             rosgraph_msgs/Clock
 
 Frames
 ------
-odom        the pose the robot had when the bridge finished settling, +X along
-            the camera axis (toward the court net), +Y left, +Z up
-base_link   the MJCF base body: +X left, +Y rearward, +Z up (the cameras look
-            along base_link -Y), so vehicle (forward, left) == base_link (y, -x)
+odom        the pose the robot had when the bridge finished settling: origin at
+            the robot, +X along the camera axis (toward the court net), +Y left,
+            +Z up, so theta = 0 at power-on
+base_link   the vehicle frame: +X forward (camera axis), +Y left, +Z up. The MJCF
+            base body is rotated 90 deg from it (+X left, +Y rearward), which is
+            folded into the published poses and IMU axes
 imu_link    the `imu` site, coincident with base_link
 
 cmd_vel is in the *vehicle* frame and follows the body as it turns:
@@ -132,8 +136,12 @@ class Bridge:
         self.pub_clock = node.create_publisher(Clock, "/clock", 10)
         self.pub_state = node.create_publisher(Float64MultiArray, "/mecanum/state", 10)
         self.sub_cmd = node.create_subscription(Twist, "/mecanum/cmd_vel", self.on_cmd, 10)
+        self.sub_wheel = node.create_subscription(
+            Float64MultiArray, "/mecanum/wheel_cmd", self.on_wheel, 10)
         self.cmd = np.zeros(3)              # vehicle (forward, left, yaw)
         self.cmd_time = -1e9
+        self.wheel_cmd = np.zeros(4)        # wheel rad/s, FL FR RL RR
+        self.wheel_time = -1e9
         self.t = 0.0
         self.v_cmd = np.zeros(3)
         self.p_start = np.zeros(3)
@@ -155,6 +163,14 @@ class Bridge:
         self.R_start = quat_to_mat(pose[3:7])
         self.cmd = np.zeros(3)
         self.cmd_time = -1e9
+
+    def on_wheel(self, msg: Float64MultiArray) -> None:
+        """Raw wheel speed targets [rad/s] (FL, FR, RL, RR); takes over from cmd_vel."""
+        if len(msg.data) != 4:
+            self.node.get_logger().warn(f"wheel_cmd needs 4 values, got {len(msg.data)}")
+            return
+        self.wheel_cmd = np.array(msg.data, dtype=float)
+        self.wheel_time = self.t
 
     def on_cmd(self, msg: Twist) -> None:
         self.cmd = np.array([msg.linear.x, msg.linear.y, msg.angular.z], dtype=float)
@@ -180,6 +196,11 @@ class Bridge:
         self.t += self.dt
 
     def control(self) -> None:
+        if (self.t - self.wheel_time) <= DEADMAN:          # raw wheel targets win
+            wheel_w = np.array([float(np.ravel(j.get_dof_vel(self.d))[0]) for j in self.wheels])
+            ctrl = np.clip(WHEEL_KP * (self.wheel_cmd - wheel_w), -TORQUE_LIMIT, TORQUE_LIMIT)
+            self.d.actuator_ctrls = ctrl.astype(np.float32)
+            return
         alive = (self.t - self.cmd_time) <= DEADMAN
         fwd, left, yaw = self.cmd if alive else (0.0, 0.0, 0.0)
         fwd = float(np.clip(fwd, -VMAX_FORE, VMAX_FORE))
@@ -206,19 +227,22 @@ class Bridge:
     def publish(self) -> None:
         t_stamp = stamp(self.t)
         p, R = self.pose()
-        v, w = self.body_velocity()
-        q_odom = mat_to_quat(M @ self.R_start.T @ R)
+        R_bl = M @ self.R_start.T @ R @ M.T          # base_link (= vehicle) in odom
         p_odom = M @ (self.R_start.T @ (p - self.p_start))
+        q_odom = mat_to_quat(R_bl)
+        v = M @ (R.T @ np.ravel(self.m.get_sensor_value("base_linvel", self.d)))
+        w = M @ (R.T @ np.ravel(self.m.get_sensor_value("imu_angvel_world", self.d)))
+        theta = math.atan2(2.0 * (q_odom[3] * q_odom[2] + q_odom[0] * q_odom[1]),
+                           1.0 - 2.0 * (q_odom[1] ** 2 + q_odom[2] ** 2))
 
         imu = Imu()
         imu.header.stamp = t_stamp
         imu.header.frame_id = "imu_link"
-        qi, qj, qk, qw = mat_to_quat(self.R_start.T @ R)
-        imu.orientation.x, imu.orientation.y, imu.orientation.z, imu.orientation.w = qi, qj, qk, qw
+        imu.orientation_covariance[0] = -1.0          # 6-axis only: no orientation
         # MuJoCo accelerometer is +g at rest; ROS (REP-145) wants -g
-        acc = -np.ravel(self.m.get_sensor_value("imu_acc", self.d))
+        acc = M @ (-np.ravel(self.m.get_sensor_value("imu_acc", self.d)))
         imu.linear_acceleration.x, imu.linear_acceleration.y, imu.linear_acceleration.z = (float(a) for a in acc)
-        gyro = np.ravel(self.m.get_sensor_value("imu_gyro", self.d))
+        gyro = M @ np.ravel(self.m.get_sensor_value("imu_gyro", self.d))
         imu.angular_velocity.x, imu.angular_velocity.y, imu.angular_velocity.z = (float(g) for g in gyro)
         self.pub_imu.publish(imu)
 
@@ -226,17 +250,18 @@ class Bridge:
         odom.header.stamp = t_stamp
         odom.header.frame_id = "odom"
         odom.child_frame_id = "base_link"
-        odom.pose.pose.position.x, odom.pose.pose.position.y, odom.pose.pose.position.z = (float(c) for c in p_odom)
-        odom.pose.pose.orientation.x, odom.pose.pose.orientation.y = float(q_odom[0]), float(q_odom[1])
-        odom.pose.pose.orientation.z, odom.pose.pose.orientation.w = float(q_odom[2]), float(q_odom[3])
-        odom.twist.twist.linear.x, odom.twist.twist.linear.y, odom.twist.twist.linear.z = (float(c) for c in v)
-        odom.twist.twist.angular.x, odom.twist.twist.angular.y = float(w[0]), float(w[1])
-        odom.twist.twist.angular.z = float(w[2])
+        odom.pose.pose.position.x = float(p_odom[0])
+        odom.pose.pose.position.y = float(p_odom[1])
+        odom.pose.pose.orientation.z = float(q_odom[2])
+        odom.pose.pose.orientation.w = float(q_odom[3])
+        odom.twist.twist.linear.x = float(v[0])
+        odom.twist.twist.linear.y = float(v[1])
         self.pub_odom.publish(odom)
 
         tf = TFMessage()
-        tf.transforms = [self._tf("odom", "base_link", p_odom, q_odom, t_stamp),
-                         self._tf("base_link", "imu_link", np.zeros(3), np.array([0.0, 0.0, 0.0, 1.0]), t_stamp)]
+        tf.transforms = [self._tf("odom", "base_link", (p_odom[0], p_odom[1], 0.0), q_odom, t_stamp),
+                         self._tf("base_link", "imu_link", (0.0, 0.0, 0.0),
+                                  np.array([0.0, 0.0, 0.0, 1.0]), t_stamp)]
         self.pub_tf.publish(tf)
 
         js = JointState()
@@ -250,10 +275,8 @@ class Bridge:
         clock.clock = t_stamp
         self.pub_clock.publish(clock)
 
-        # vehicle-frame velocities: (forward, left) = (-base y, +base x)
         state = Float64MultiArray()
-        state.data = [float(-v[1]), float(v[0]), float(w[2]),
-                      float(self.v_cmd[0]), float(self.v_cmd[1]), float(self.v_cmd[2])]
+        state.data = [float(p_odom[0]), float(p_odom[1]), float(theta), float(v[0]), float(v[1])]
         self.pub_state.publish(state)
 
     @staticmethod
