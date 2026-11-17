@@ -285,6 +285,7 @@ while rclpy.ok():
 |---|---|
 | 物理 `dt` 由**最快的物体**决定：0.0005 s（2000 Hz） | 发球 20–25 m/s 时，2 ms 一步会走 50 mm（超过球半径 33.5 mm），球直接穿过或陷进球场；0.5 ms 一步只走 10–12 mm |
 | 渲染 60 Hz / 发布 120 Hz，与物理解耦 | 2000 Hz 全部喂给 ROS 回调只会拖垮 Python；三个独立累加器 |
+| 要并发就开 batch：`SceneData(model, batch=[N])` | 一次 `step` 推进所有环境（Rust 后端多线程）。实测 batch 32 达 **7.9 万 env-step/s**，单环境只有 1.0 万 |
 | 传感器读值，不做数值差分 | `framequat`/`gyro`/`accelerometer` 都是解析量，差分噪声大一个量级 |
 | 结构性改动走生成器 | 视觉/碰撞/inertial 三份数据必须同步 |
 | 验证优先用数字 | 位置、速度、包围盒、姿态四元数都能断言；截图只作辅助 |
@@ -326,4 +327,4 @@ while rclpy.ok():
 - MotrixSim 仓库：https://github.com/Motphys/motrixsim
 - MotrixLab：https://github.com/Motphys/MotrixLab ｜ 文档：https://motrixlab.readthedocs.io
 - UniLab：https://github.com/Motphys/UniLab ｜ 文档：https://unilabsim.github.io/UniLab-doc/
-- 本项目产物：`gen_mjcf.py`（模型生成）、`motion.py`（驱动）、`ros2_bridge.py`（ROS2 桥接）、`test_motion.py`（指标回归）
+- 本项目产物：`gen_mjcf.py`（模型生成）、`ball_physics.py`（球飞行/弹跳/发球解算 + 轮速标定）、`ros2_bridge.py`（ROS2 桥接：cmd_vel、IMU、odom、发球服务）、`catch_env.py` + `train_catch.py`（批量并行 PPO 训练）、`eval_catch.py`（策略评估）、`test_motion.py`（指标回归）

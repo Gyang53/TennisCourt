@@ -115,6 +115,31 @@ commands. The wheel feedforward gains were measured on this model
 (0.09958 m/s, 0.09712 m/s, 0.18613 rad/s per wheel rad/s) and are trimmed against the
 measured body velocity.
 
+## Catch policy (reinforcement learning)
+
+`train_catch.py` trains a PPO policy to bring the ball into the robot's cage,
+using **one batched MotrixSim scene** (`SceneData(model, batch=[N])`), so all
+environments step in parallel inside the Rust backend (~40 env-sim-seconds per
+wall second at 32-48 envs, measured).
+
+* action: vehicle-frame `(forward, left, yaw rate)`, normalised to `[-1, 1]` and
+  mapped through the same wheel IK + torque servo as the ROS bridge
+* observation: robot offset/velocity/heading, ball relative position/velocity
+* reward: potential shaping on the cage-to-ball distance, `+1` when the ball
+  ends up inside the cage, episodes end on catch / ball out of the play area /
+  timeout
+* curriculum: serve speed, net clearance and the *aim radius* (how far from the
+  robot the serve bounces) ramp up over training, ending at the real
+  distribution (16-20 m/s, 0.45-0.8 m clearance)
+
+```bash
+.venv/bin/python train_catch.py --envs 48 --iters 400     # writes policies/catch_ppo.pt
+.venv/bin/python eval_catch.py --episodes 48             # exact legal serves
+```
+
+`catch_env.py` holds the vectorised environment; `eval_catch.py` grades a policy
+with the same exact serve planner the ROS bridge uses.
+
 ## Cameras
 
 Two mono cameras migrated from the source `RallyCourt.usd` (LeftCam / RightCam):
