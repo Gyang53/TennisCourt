@@ -79,6 +79,10 @@ def train(args):
     np.random.seed(args.seed)
     env = CatchEnv(num_envs=args.envs, seed=args.seed)
     net = ActorCritic()
+    if args.init:                       # continue from a (cloned) policy
+        ckpt = torch.load(args.init, map_location="cpu")
+        net.load_state_dict(ckpt["model"])
+        print(f"initialised from {args.init}", flush=True)
     opt = torch.optim.Adam(net.parameters(), lr=args.lr, eps=1e-5)
 
     obs = env.obs()
@@ -189,6 +193,7 @@ def main():
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--log-every", type=int, default=5)
     ap.add_argument("--save-every", type=int, default=50)
+    ap.add_argument("--init", default="", help="checkpoint to start from")
     ap.add_argument("--out", default="policies/catch_ppo.pt")
     train(ap.parse_args())
 

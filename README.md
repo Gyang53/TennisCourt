@@ -140,6 +140,20 @@ wall second at 32-48 envs, measured).
 `catch_env.py` holds the vectorised environment; `eval_catch.py` grades a policy
 with the same exact serve planner the ROS bridge uses.
 
+PPO from scratch did not find this task (the catch window is ~0.2 m wide and only
+pays out once per episode), so the policy is first distilled from a scripted
+teacher and then fine-tuned:
+
+```bash
+.venv/bin/python bc_train.py --episodes 400        # policy -> policies/catch_bc.pt
+.venv/bin/python train_catch.py --init policies/catch_bc.pt --iters 220 --rollout 128
+```
+
+The teacher is PD tracking of the catch point, forward-simulated with the same
+drag and bounce model (0.3 m prediction error, shrinking as the ball falls);
+it catches 78% of the easy serves and 28% of the full-range ones, and the
+cloned policy reproduces 50% / 38% before any RL fine-tuning.
+
 ## Cameras
 
 Two mono cameras migrated from the source `RallyCourt.usd` (LeftCam / RightCam):
