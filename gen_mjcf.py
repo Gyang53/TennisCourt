@@ -157,13 +157,17 @@ def main(out_path, court=None):
       ' diffuse="0.9 0.9 0.9" ambient="0.3 0.3 0.32"/>')
     if court:
         # standard court frame: net on x = 0, baselines at x = +-11.885, +Y = robot's left
+        # court and surround are visuals only; the green sits 1 mm lower so the two
+        # coplanar tops do not z-fight
         a(f'    <geom name="court" type="box" size="{COURT_HALF[0]} {COURT_HALF[1]} 0.02"'
-          ' pos="0 0 -0.02" rgba="0.16 0.32 0.52 1" condim="3" friction="1.2 0.01 0.001"'
-          ' contype="1" conaffinity="5"/>')
-        # surround is flush with the playing surface (1 mm under it): a step here would
-        # trap the wheels, since the robot starts straddling its own baseline
+          ' pos="0 0 -0.02" rgba="0.16 0.32 0.52 1" contype="0" conaffinity="0"/>')
         a(f'    <geom name="ground" type="box" size="{COURT_HALF[0] + 3} {COURT_HALF[1] + 3} 0.02"'
-          ' pos="0 0 -0.021" rgba="0.12 0.30 0.16 1" contype="1" conaffinity="5"/>')
+          ' pos="0 0 -0.021" rgba="0.12 0.30 0.16 1" contype="0" conaffinity="0"/>')
+        # one flat collider under the whole play area: a seam at the court edge (exactly
+        # where the baseline is drawn) would kick the wheels as they cross it
+        a(f'    <geom name="ground_col" type="box" size="{COURT_HALF[0] + 3} {COURT_HALF[1] + 3} 0.02"'
+          ' pos="0 0 -0.02" mass="0" rgba="0 0 0 0" condim="3" friction="1.2 0.01 0.001"'
+          ' contype="1" conaffinity="5"/>')
         a('    <geom name="net_grid" type="mesh" mesh="net_grid" mass="0"'
           ' contype="0" conaffinity="0" rgba="0.12 0.12 0.13 1"/>')
         a('    <geom name="net_band" type="mesh" mesh="net_band" mass="0"'
