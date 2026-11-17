@@ -24,12 +24,17 @@ from catch_env import CatchEnv, OBS_DIM
 VMAX = np.array([4.0, 4.5, 3.0])
 HIDDEN = 128
 
-CURRICULUM = [                       # (progress, serve speed, clearance, aim radius)
-    (0.00, (10.0, 13.0), (0.8, 1.2), (0.8, 0.5)),
-    (0.25, (12.0, 16.0), (0.6, 1.0), (1.5, 1.2)),
-    (0.55, (14.0, 18.0), (0.5, 0.9), (2.5, 2.2)),
-    (0.80, (16.0, 20.0), (0.45, 0.8), (3.0, 3.0)),
+# serve speed, net clearance, aim radius (how far from the robot the serve bounces).
+# The teacher advances a phase only once the catch rate proves the policy can
+# handle the current one - a time-based schedule moved on before it had learned.
+CURRICULUM = [
+    ((8.0, 11.0), (0.5, 0.9), (0.5, 0.3)),
+    ((11.0, 14.0), (0.5, 0.9), (1.0, 0.6)),
+    ((13.0, 16.0), (0.6, 1.0), (1.8, 1.2)),
+    ((15.0, 18.0), (0.5, 0.9), (2.5, 2.0)),
+    ((16.0, 20.0), (0.45, 0.8), (3.0, 3.0)),
 ]
+PROMOTE_RATE = 0.25          # rolling catch rate that unlocks the next phase
 
 
 class ActorCritic(nn.Module):
@@ -41,7 +46,7 @@ class ActorCritic(nn.Module):
         )
         self.actor = nn.Linear(hidden, act_dim)
         self.critic = nn.Linear(hidden, 1)
-        self.log_std = nn.Parameter(torch.full((act_dim,), -0.6))
+        self.log_std = nn.Parameter(torch.full((act_dim,), -1.0))
         for m in (self.trunk[0], self.trunk[2], self.actor, self.critic):
             nn.init.orthogonal_(m.weight, np.sqrt(2))
             nn.init.zeros_(m.bias)
@@ -62,13 +67,11 @@ class ActorCritic(nn.Module):
         return raw.numpy(), value.numpy(), logp.numpy()
 
 
-def schedule(it: int, total: int, idx: int):
-    frac = it / max(total, 1)
-    chosen = CURRICULUM[0]
-    for row in CURRICULUM:
-        if frac >= row[0]:
-            chosen = row
-    return chosen[idx]
+def apply_phase(env, phase: int):
+    speed, clearance, radius = CURRICULUM[min(phase, len(CURRICULUM) - 1)]
+    env.serve_speed = speed
+    env.serve_clearance = clearance
+    env.radius = radius
 
 
 def train(args):
@@ -84,15 +87,15 @@ def train(args):
     t0 = time.perf_counter()
     stats = {"iters": 0, "steps": 0}
 
+    phase = 0
+    apply_phase(env, phase)
     for it in range(1, args.iters + 1):
-        env.serve_speed = schedule(it, args.iters, 1)
-        env.serve_clearance = schedule(it, args.iters, 2)
-        env.radius = schedule(it, args.iters, 3)
         buf_obs, buf_act, buf_logp, buf_val, buf_rew, buf_done = [], [], [], [], [], []
         for _ in range(args.rollout):
-            a, v, logp = net.act(torch.from_numpy(obs))
+            obs_t = obs                      # the observation the action is sampled from
+            a, v, logp = net.act(torch.from_numpy(obs_t))
             obs, rew, done, info = env.step(a * VMAX)
-            buf_obs.append(obs)
+            buf_obs.append(obs_t)            # (was appending the post-step obs: off by one)
             buf_act.append(a)
             buf_logp.append(logp)
             buf_val.append(v)
@@ -153,9 +156,13 @@ def train(args):
             rate = 100.0 * np.mean(catch_flags[-window:]) if catch_flags else float("nan")
             ret_mean = np.mean(finished_returns[-window:]) if finished_returns else float("nan")
             sp = time.perf_counter() - t0
+            if rate >= 100.0 * PROMOTE_RATE and phase < len(CURRICULUM) - 1 and len(catch_flags) > 150:
+                phase += 1
+                apply_phase(env, phase)
+                print(f"  -> phase {phase} unlocked (catch {rate:.0f}%)", flush=True)
             print(f"iter {it:4d}  steps {stats['steps']/1e6:5.2f}M  "
                   f"catch {rate:5.1f}%  return {ret_mean:6.2f}  "
-                  f"serve {env.serve_speed[0]:.0f}-{env.serve_speed[1]:.0f} m/s  "
+                  f"phase {phase} serve {env.serve_speed[0]:.0f}-{env.serve_speed[1]:.0f} m/s  "
                   f"{stats['steps']/sp/1e3:6.1f}k steps/s  {sp/60:5.1f} min", flush=True)
             if it % args.save_every == 0:
                 Path(args.out).parent.mkdir(parents=True, exist_ok=True)
@@ -170,7 +177,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--envs", type=int, default=48)
     ap.add_argument("--iters", type=int, default=400)
-    ap.add_argument("--rollout", type=int, default=128)
+    ap.add_argument("--rollout", type=int, default=256)
     ap.add_argument("--epochs", type=int, default=4)
     ap.add_argument("--minibatch", type=int, default=256)
     ap.add_argument("--lr", type=float, default=3e-4)
@@ -178,7 +185,7 @@ def main():
     ap.add_argument("--lam", type=float, default=0.95)
     ap.add_argument("--clip", type=float, default=0.2)
     ap.add_argument("--vf-coef", type=float, default=0.5)
-    ap.add_argument("--ent-coef", type=float, default=0.01)
+    ap.add_argument("--ent-coef", type=float, default=0.005)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--log-every", type=int, default=5)
     ap.add_argument("--save-every", type=int, default=50)

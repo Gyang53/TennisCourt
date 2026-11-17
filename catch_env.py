@@ -37,6 +37,8 @@ def sample_serve(rng, speed_range, clearance_range, aim=(-4.9, 0.0), radius=(1.5
     still passes over it.  Microseconds; the exact planner in ros2_bridge is
     used for the real serves.
     """
+    v0 = np.array([-10.0, 0.0, 2.0])
+    spawn = np.array([COURT_X + 1.0, 0.0, 2.2])
     for _ in range(60):
         bx = float(np.clip(aim[0] + rng.uniform(-radius[0], radius[0]), -6.2, -1.2))
         by = float(np.clip(aim[1] + rng.uniform(-radius[1], radius[1]), -3.6, 3.6))
@@ -72,6 +74,7 @@ EPISODE_S = 4.0
 START = (-11.885, 0.0)          # baseline centre, robot facing the net
 CAGE_HALF = 0.21                # cage footprint half width
 CAGE_LOW, CAGE_HIGH = -0.06, 0.36   # base-frame z window of a catch
+CATCH_Z = 0.30                      # world height where the approach is scored
 VMAX_FORE, VMAX_LAT, WMAX = 4.0, 4.5, 3.0
 OBS_DIM = 12
 
@@ -103,6 +106,7 @@ class CatchEnv:
         self.t = np.zeros(self.n)
         self.done = np.ones(self.n, dtype=bool)
         self.caught = np.zeros(self.n)
+        self.prev_bz = np.zeros(self.n)
         self._pred = None
         self._pred_age = 99
         self.reset()
@@ -156,6 +160,7 @@ class CatchEnv:
         self.t[idx] = 0.0
         self.caught[idx] = 0.0
         self.done[idx] = False
+        self.prev_bz[idx] = pos[idx, self.ball_p[2]]
         self._pred_age = 99
 
     # -------------------------------------------------------------- physics
@@ -270,6 +275,20 @@ class CatchEnv:
         timeout = self.t >= EPISODE_S
         done = ~self.done & (caught_now | out | timeout)
         reward = 0.25 * (self._potential() - phase0)     # potential shaping
+        # dense approach reward: the moment the ball drops past the cage rim the
+        # miss distance is what decides the catch, so pay for it directly
+        crossing = (self.prev_bz > CATCH_Z) & (bp[:, 2] <= CATCH_Z) & (self.ball_vel()[:, 2] < 0)
+        if crossing.any():
+            pr, _ = self.robot_pose()
+            miss = np.linalg.norm(bp[crossing, :2] - pr[crossing, :2], axis=1)
+            reward[crossing] += 0.6 * np.clip(1.0 - miss / 0.6, 0.0, 1.0)
+        # final approach: pull toward the ball once it is low and falling
+        p_robot, _ = self.robot_pose()
+        dist = np.linalg.norm(bp[:, :2] - p_robot[:, :2], axis=1)
+        falling = (bp[:, 2] < 1.0) & (self.ball_vel()[:, 2] < 0)
+        if falling.any():
+            reward[falling] -= 0.01 * np.minimum(dist[falling], 3.0)
+        self.prev_bz = bp[:, 2].copy()
         reward[caught_now] = 1.0
         reward[out & ~caught_now] -= 0.5
         self.done = self.done | done
