@@ -1,0 +1,13 @@
+# motionsim / demo scaffolding is not part of the scene assets
+__pycache__/
+*.pyc
+*.png
+*.blend
+motion.py
+demo.py
+demo_court.py
+demo_spec.py
+render.py
+render_court.py
+test_sim.py
+test_motion.py
