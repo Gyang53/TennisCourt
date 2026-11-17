@@ -150,9 +150,31 @@ teacher and then fine-tuned:
 ```
 
 The teacher is PD tracking of the catch point, forward-simulated with the same
-drag and bounce model (0.3 m prediction error, shrinking as the ball falls);
-it catches 78% of the easy serves and 28% of the full-range ones, and the
-cloned policy reproduces 50% / 38% before any RL fine-tuning.
+drag and bounce model (0.1-0.15 m prediction error); it catches 78% of the easy
+serves and 28% at 12-16 m/s, and the cloned policy reproduces 50% / 38% before
+any RL fine-tuning.
+
+Measured status (48 envs, `policies/catch_bc.pt`):
+
+| serve | aim radius | catch rate |
+|---|---|---|
+| 12-16 m/s | (0.5, 0.3) | 50% |
+| 12-16 m/s | (1.5, 1.0) | 38% |
+| 12-16 m/s | (3.0, 3.0) | 16% |
+| 16-20 m/s, exact planner | anywhere legal | ~0% |
+
+The catch window is about ±0.2 m while the ball crosses it at 8 m/s, so this is
+a precision task: the scripted teacher itself only manages 28% at 12-16 m/s and
+nothing at 16-20 m/s, and no cloned policy can beat its teacher. To push the
+full-range number up, in order of impact:
+
+1. shrink the catch-point prediction error below 0.1 m (5 ms forward
+   integration is at 0.11-0.14 m; a short-horizon re-plan would close it);
+2. widen the physical catchment (a funnel/backboard over the cage mouth raises
+   the ceiling faster than any controller work);
+3. only then PPO fine-tuning, with critic pretraining, actor lr 1e-4,
+   `log_std` starting at -2.0 and the actor frozen for the first ~20 iterations
+   (the naive fine-tune destroyed the cloned policy: 50% -> 1%).
 
 ## Cameras
 

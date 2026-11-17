@@ -210,7 +210,7 @@ class CatchEnv:
                                            -TORQUE_LIMIT, TORQUE_LIMIT).astype(np.float32)
 
     # ------------------------------------------------------------ intercept
-    def _predict(self, z_target=0.30, dt=0.02, horizon=3.0):
+    def _predict(self, z_target=0.30, dt=0.005, horizon=3.0):
         """Forward-simulate the ball (same drag + bounce model as the sim) and
         return where/when it next descends through z_target after a bounce.
 
