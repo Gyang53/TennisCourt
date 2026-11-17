@@ -1,0 +1,462 @@
+<mujoco model="rallycourt_mecanum_robot">
+  <compiler angle="radian" autolimits="true"/>
+  <option timestep="0.0005" iterations="120" tolerance="1e-8" gravity="0 0 -9.81"/>
+  <asset><texture type="skybox" builtin="gradient" rgb1="0.42 0.55 0.72" rgb2="0.86 0.88 0.92" width="512" height="512"/></asset>
+  <default>
+    <geom friction="1.0 0.01 0.001" solref="0.004 1"/>
+  </default>
+  <asset>
+    <mesh name="base" file="meshes/urdf_base.obj" scale="2.0 2.0 2.0"/>
+    <mesh name="mecanum_wheel" file="meshes/urdf_mecanum_wheel.obj" scale="2.0 2.0 2.0"/>
+    <mesh name="roller" file="meshes/urdf_roller.obj" scale="2.0 2.0 2.0"/>
+    <mesh name="mecanum_wheel2" file="meshes/urdf_mecanum_wheel2.obj" scale="2.0 2.0 2.0"/>
+    <mesh name="net_grid" file="meshes/net_grid.obj"/>
+    <mesh name="net_band" file="meshes/net_band.obj"/>
+  </asset>
+  <worldbody>
+    <light name="sun" pos="0 0 6" dir="0.45 0.35 -0.82" directional="true" diffuse="0.9 0.9 0.9" ambient="0.3 0.3 0.32"/>
+    <geom name="court" type="box" size="11.885 5.485 0.02" pos="0 0 -0.02" rgba="0.16 0.32 0.52 1" contype="0" conaffinity="0"/>
+    <geom name="ground" type="box" size="14.885 8.485 0.02" pos="0 0 -0.021" rgba="0.12 0.30 0.16 1" contype="0" conaffinity="0"/>
+    <geom name="ground_col" type="box" size="14.885 8.485 0.02" pos="0 0 -0.02" mass="0" rgba="0 0 0 0" condim="3" friction="1.2 0.01 0.001" contype="1" conaffinity="5"/>
+    <geom name="net_grid" type="mesh" mesh="net_grid" mass="0" contype="0" conaffinity="0" rgba="0.12 0.12 0.13 1"/>
+    <geom name="net_band" type="mesh" mesh="net_band" mass="0" contype="0" conaffinity="0" rgba="0.97 0.97 0.97 1"/>
+    <geom name="net_col" contype="0" type="box" size="0.006 6.4 0.535" pos="0 0 0.535" mass="0" contype="32" conaffinity="2" group="3"/>
+    <geom name="net_post_n" type="capsule" size="0.02 0.535" pos="0 -6.400 0.535" rgba="0.15 0.15 0.16 1" contype="32" conaffinity="2"/>
+    <geom name="net_post_p" type="capsule" size="0.02 0.535" pos="0 6.400 0.535" rgba="0.15 0.15 0.16 1" contype="32" conaffinity="2"/>
+    <geom name="line_sideline_d_pos" type="box" size="11.885 0.025 0.001" pos="0 5.485 0.001" rgba="0.95 0.95 0.95 1" contype="0" conaffinity="0"/>
+    <geom name="line_sideline_d_neg" type="box" size="11.885 0.025 0.001" pos="0 -5.485 0.001" rgba="0.95 0.95 0.95 1" contype="0" conaffinity="0"/>
+    <geom name="line_sideline_s_pos" type="box" size="11.885 0.025 0.001" pos="0 4.115 0.001" rgba="0.95 0.95 0.95 1" contype="0" conaffinity="0"/>
+    <geom name="line_sideline_s_neg" type="box" size="11.885 0.025 0.001" pos="0 -4.115 0.001" rgba="0.95 0.95 0.95 1" contype="0" conaffinity="0"/>
+    <geom name="line_baseline_pos" type="box" size="0.025 5.485 0.001" pos="11.885 0 0.001" rgba="0.95 0.95 0.95 1" contype="0" conaffinity="0"/>
+    <geom name="line_baseline_neg" type="box" size="0.025 5.485 0.001" pos="-11.885 0 0.001" rgba="0.95 0.95 0.95 1" contype="0" conaffinity="0"/>
+    <geom name="line_service_pos" type="box" size="0.025 4.115 0.001" pos="6.4 0 0.001" rgba="0.95 0.95 0.95 1" contype="0" conaffinity="0"/>
+    <geom name="line_service_neg" type="box" size="0.025 4.115 0.001" pos="-6.4 0 0.001" rgba="0.95 0.95 0.95 1" contype="0" conaffinity="0"/>
+    <geom name="line_centre" type="box" size="6.4 0.025 0.001" pos="0 0 0.001" rgba="0.95 0.95 0.95 1" contype="0" conaffinity="0"/>
+    <geom name="line_mark_pos" type="box" size="0.05 0.025 0.001" pos="11.81 0 0.001" rgba="0.95 0.95 0.95 1" contype="0" conaffinity="0"/>
+    <geom name="line_mark_neg" type="box" size="0.05 0.025 0.001" pos="-11.81 0 0.001" rgba="0.95 0.95 0.95 1" contype="0" conaffinity="0"/>
+    <body name="base" pos="-11.885 0.000 0.1560" quat="0.707107 0 0 0.707107">
+      <freejoint name="base_free"/>
+      <site name="imu" pos="0 0 0" size="0.01" rgba="1 0.4 0 1" group="4"/>
+      <inertial pos="0 0 0.120" mass="16.0000" diaginertia="0.538133 0.6 0.898133"/>
+      <geom name="base_vis" type="mesh" mesh="base" quat="1 0 0 0" mass="0" contype="0" conaffinity="0" rgba="0.78 0.79 0.82 1"/>
+      <geom name="base_col" type="box" size="0.3000 0.2800 0.0600" pos="0 0 -0.0460" mass="0" rgba="0.7 0.7 0.72 1" contype="8" conaffinity="1" group="3"/>
+      <geom name="deck" type="box" size="0.275 0.275 0.008" pos="0 0 0.107" rgba="0.85 0.85 0.88 1" contype="16" conaffinity="1"/>
+      <geom name="net_wall_py" type="box" size="0.208 0.024 0.18" pos="0 0.208 0.295" rgba="0.42 0.45 0.50 0.55" contype="16" conaffinity="1"/>
+      <geom name="net_wall_px" type="box" size="0.024 0.208 0.18" pos="0.208 0 0.295" rgba="0.42 0.45 0.50 0.55" contype="16" conaffinity="1"/>
+      <geom name="net_wall_nx" type="box" size="0.024 0.208 0.18" pos="-0.208 0 0.295" rgba="0.42 0.45 0.50 0.55" contype="16" conaffinity="1"/>
+      <geom name="net_lip" type="box" size="0.208 0.024 0.080" pos="0 -0.208 0.195" rgba="0.42 0.45 0.50 0.55" contype="16" conaffinity="1"/>
+      <camera name="LeftCam" pos="0.200 -0.190 0.210" xyaxes="-1 0 0 0 0 1" fovy="57.47"/>
+      <camera name="RightCam" pos="-0.200 -0.190 0.210" xyaxes="-1 0 0 0 0 1" fovy="57.47"/>
+      <geom name="post_nxny" type="capsule" size="0.008 0.230" pos="-0.200 -0.200 0.245" rgba="0.9 0.9 0.92 1" contype="16" conaffinity="1"/>
+      <geom name="post_nxpy" type="capsule" size="0.008 0.230" pos="-0.200 0.200 0.245" rgba="0.9 0.9 0.92 1" contype="16" conaffinity="1"/>
+      <geom name="post_pxny" type="capsule" size="0.008 0.230" pos="0.200 -0.200 0.245" rgba="0.9 0.9 0.92 1" contype="16" conaffinity="1"/>
+      <geom name="post_pxpy" type="capsule" size="0.008 0.230" pos="0.200 0.200 0.245" rgba="0.9 0.9 0.92 1" contype="16" conaffinity="1"/>
+      <body name="FL_wheel" pos="0.2498 0.285 -0.056" quat="-3.05506e-08 3.05506e-08 -0.707107 0.707107">
+        <joint name="FL_wheel_joint" type="hinge" axis="0 0 1" damping="0.02" armature="0.005" frictionloss="0.005"/>
+        <inertial pos="0 0 0" mass="0.3000" diaginertia="0.00105581 0.00105581 0.0015"/>
+        <geom name="FL_hub_vis" type="mesh" mesh="mecanum_wheel" quat="0.707107 0.707107 0 0" mass="0" contype="0" conaffinity="0" rgba="0.16 0.16 0.18 1"/>
+        <body name="r1_FL_roller_link" pos="0.060796 -0.05106 0" quat="0.0795532 -0.270317 -0.270878 -0.920448">
+          <joint name="r1_FL_roller_joint" type="hinge" axis="0 0 1" damping="5e-5" armature="1e-5" frictionloss="1e-6"/>
+          <inertial pos="0 0 0" mass="0.10000" diaginertia="0.000142489 0.000142489 2.1218e-05"/>
+          <geom name="r1_FL_roller_link_vis" type="mesh" mesh="roller" quat="0.707107 0 -0.707107 0" mass="0" contype="0" conaffinity="0" rgba="0.55 0.57 0.62 1"/>
+          <geom name="r1_FL_roller_link_col0" type="sphere" size="0.00770" pos="0 0 -0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r1_FL_roller_link_col1" type="sphere" size="0.01860" pos="0 0 -0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r1_FL_roller_link_col2" type="sphere" size="0.02060" pos="0 0 0.00000" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r1_FL_roller_link_col3" type="sphere" size="0.01860" pos="0 0 0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r1_FL_roller_link_col4" type="sphere" size="0.00770" pos="0 0 0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+        </body>
+        <body name="r2_FL_roller_link" pos="0.079392 -3.584e-05 0" quat="9.9396e-07 9.9396e-07 -0.382684 -0.923879">
+          <joint name="r2_FL_roller_joint" type="hinge" axis="0 0 1" damping="5e-5" armature="1e-5" frictionloss="1e-6"/>
+          <inertial pos="0 0 0" mass="0.10000" diaginertia="0.000142489 0.000142489 2.1218e-05"/>
+          <geom name="r2_FL_roller_link_vis" type="mesh" mesh="roller" quat="0.707107 0 -0.707107 0" mass="0" contype="0" conaffinity="0" rgba="0.55 0.57 0.62 1"/>
+          <geom name="r2_FL_roller_link_col0" type="sphere" size="0.00770" pos="0 0 -0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r2_FL_roller_link_col1" type="sphere" size="0.01860" pos="0 0 -0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r2_FL_roller_link_col2" type="sphere" size="0.02060" pos="0 0 0.00000" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r2_FL_roller_link_col3" type="sphere" size="0.01860" pos="0 0 0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r2_FL_roller_link_col4" type="sphere" size="0.00770" pos="0 0 0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+        </body>
+        <body name="r3_FL_roller_link" pos="0.060842 0.051004 0" quat="-0.0795535 0.270319 -0.270888 -0.920445">
+          <joint name="r3_FL_roller_joint" type="hinge" axis="0 0 1" damping="5e-5" armature="1e-5" frictionloss="1e-6"/>
+          <inertial pos="0 0 0" mass="0.10000" diaginertia="0.000142489 0.000142489 2.1218e-05"/>
+          <geom name="r3_FL_roller_link_vis" type="mesh" mesh="roller" quat="0.707107 0 -0.707107 0" mass="0" contype="0" conaffinity="0" rgba="0.55 0.57 0.62 1"/>
+          <geom name="r3_FL_roller_link_col0" type="sphere" size="0.00770" pos="0 0 -0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r3_FL_roller_link_col1" type="sphere" size="0.01860" pos="0 0 -0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r3_FL_roller_link_col2" type="sphere" size="0.02060" pos="0 0 0.00000" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r3_FL_roller_link_col3" type="sphere" size="0.01860" pos="0 0 0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r3_FL_roller_link_col4" type="sphere" size="0.00770" pos="0 0 0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+        </body>
+        <body name="r4_FL_roller_link" pos="0.0138214 0.07818 0" quat="-0.0233207 0.378408 -0.0569243 -0.923592">
+          <joint name="r4_FL_roller_joint" type="hinge" axis="0 0 1" damping="5e-5" armature="1e-5" frictionloss="1e-6"/>
+          <inertial pos="0 0 0" mass="0.10000" diaginertia="0.000142489 0.000142489 2.1218e-05"/>
+          <geom name="r4_FL_roller_link_vis" type="mesh" mesh="roller" quat="0.707107 0 -0.707107 0" mass="0" contype="0" conaffinity="0" rgba="0.55 0.57 0.62 1"/>
+          <geom name="r4_FL_roller_link_col0" type="sphere" size="0.00770" pos="0 0 -0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r4_FL_roller_link_col1" type="sphere" size="0.01860" pos="0 0 -0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r4_FL_roller_link_col2" type="sphere" size="0.02060" pos="0 0 0.00000" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r4_FL_roller_link_col3" type="sphere" size="0.01860" pos="0 0 0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r4_FL_roller_link_col4" type="sphere" size="0.00770" pos="0 0 0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+        </body>
+        <body name="r5_FL_roller_link" pos="-0.039666 0.068774 0" quat="0.0627751 0.34364 0.168377 -0.921748">
+          <joint name="r5_FL_roller_joint" type="hinge" axis="0 0 1" damping="5e-5" armature="1e-5" frictionloss="1e-6"/>
+          <inertial pos="0 0 0" mass="0.10000" diaginertia="0.000142489 0.000142489 2.1218e-05"/>
+          <geom name="r5_FL_roller_link_vis" type="mesh" mesh="roller" quat="0.707107 0 -0.707107 0" mass="0" contype="0" conaffinity="0" rgba="0.55 0.57 0.62 1"/>
+          <geom name="r5_FL_roller_link_col0" type="sphere" size="0.00770" pos="0 0 -0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r5_FL_roller_link_col1" type="sphere" size="0.01860" pos="0 0 -0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r5_FL_roller_link_col2" type="sphere" size="0.02060" pos="0 0 0.00000" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r5_FL_roller_link_col3" type="sphere" size="0.01860" pos="0 0 0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r5_FL_roller_link_col4" type="sphere" size="0.00770" pos="0 0 0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+        </body>
+        <body name="r6_FL_roller_link" pos="-0.074592 0.027186 0" quat="0.0583141 0.153344 0.350624 -0.922035">
+          <joint name="r6_FL_roller_joint" type="hinge" axis="0 0 1" damping="5e-5" armature="1e-5" frictionloss="1e-6"/>
+          <inertial pos="0 0 0" mass="0.10000" diaginertia="0.000142489 0.000142489 2.1218e-05"/>
+          <geom name="r6_FL_roller_link_vis" type="mesh" mesh="roller" quat="0.707107 0 -0.707107 0" mass="0" contype="0" conaffinity="0" rgba="0.55 0.57 0.62 1"/>
+          <geom name="r6_FL_roller_link_col0" type="sphere" size="0.00770" pos="0 0 -0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r6_FL_roller_link_col1" type="sphere" size="0.01860" pos="0 0 -0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r6_FL_roller_link_col2" type="sphere" size="0.02060" pos="0 0 0.00000" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r6_FL_roller_link_col3" type="sphere" size="0.01860" pos="0 0 0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r6_FL_roller_link_col4" type="sphere" size="0.00770" pos="0 0 0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+        </body>
+        <body name="r7_FL_roller_link" pos="-0.074616 -0.02712 0" quat="0.350632 -0.92204 0.0582973 0.153298">
+          <joint name="r7_FL_roller_joint" type="hinge" axis="0 0 1" damping="5e-5" armature="1e-5" frictionloss="1e-6"/>
+          <inertial pos="0 0 0" mass="0.10000" diaginertia="0.000142489 0.000142489 2.1218e-05"/>
+          <geom name="r7_FL_roller_link_vis" type="mesh" mesh="roller" quat="0.707107 0 -0.707107 0" mass="0" contype="0" conaffinity="0" rgba="0.55 0.57 0.62 1"/>
+          <geom name="r7_FL_roller_link_col0" type="sphere" size="0.00770" pos="0 0 -0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r7_FL_roller_link_col1" type="sphere" size="0.01860" pos="0 0 -0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r7_FL_roller_link_col2" type="sphere" size="0.02060" pos="0 0 0.00000" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r7_FL_roller_link_col3" type="sphere" size="0.01860" pos="0 0 0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r7_FL_roller_link_col4" type="sphere" size="0.00770" pos="0 0 0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+        </body>
+        <body name="r8_FL_roller_link" pos="-0.039726 -0.068738 0" quat="0.168386 -0.921747 0.0627785 0.343639">
+          <joint name="r8_FL_roller_joint" type="hinge" axis="0 0 1" damping="5e-5" armature="1e-5" frictionloss="1e-6"/>
+          <inertial pos="0 0 0" mass="0.10000" diaginertia="0.000142489 0.000142489 2.1218e-05"/>
+          <geom name="r8_FL_roller_link_vis" type="mesh" mesh="roller" quat="0.707107 0 -0.707107 0" mass="0" contype="0" conaffinity="0" rgba="0.55 0.57 0.62 1"/>
+          <geom name="r8_FL_roller_link_col0" type="sphere" size="0.00770" pos="0 0 -0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r8_FL_roller_link_col1" type="sphere" size="0.01860" pos="0 0 -0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r8_FL_roller_link_col2" type="sphere" size="0.02060" pos="0 0 0.00000" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r8_FL_roller_link_col3" type="sphere" size="0.01860" pos="0 0 0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r8_FL_roller_link_col4" type="sphere" size="0.00770" pos="0 0 0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+        </body>
+        <body name="r9_FL_roller_link" pos="0.0137518 -0.078192 0" quat="0.0569151 0.923593 0.0233169 -0.378408">
+          <joint name="r9_FL_roller_joint" type="hinge" axis="0 0 1" damping="5e-5" armature="1e-5" frictionloss="1e-6"/>
+          <inertial pos="0 0 0" mass="0.10000" diaginertia="0.000142489 0.000142489 2.1218e-05"/>
+          <geom name="r9_FL_roller_link_vis" type="mesh" mesh="roller" quat="0.707107 0 -0.707107 0" mass="0" contype="0" conaffinity="0" rgba="0.55 0.57 0.62 1"/>
+          <geom name="r9_FL_roller_link_col0" type="sphere" size="0.00770" pos="0 0 -0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r9_FL_roller_link_col1" type="sphere" size="0.01860" pos="0 0 -0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r9_FL_roller_link_col2" type="sphere" size="0.02060" pos="0 0 0.00000" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r9_FL_roller_link_col3" type="sphere" size="0.01860" pos="0 0 0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r9_FL_roller_link_col4" type="sphere" size="0.00770" pos="0 0 0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+        </body>
+      </body>
+      <body name="FR_wheel" pos="0.2498 -0.285 -0.056" quat="0.707107 0.707107 0 0">
+        <joint name="FR_wheel_joint" type="hinge" axis="0 0 1" damping="0.02" armature="0.005" frictionloss="0.005"/>
+        <inertial pos="0 0 0" mass="0.3000" diaginertia="0.00105581 0.00105581 0.0015"/>
+        <geom name="FR_hub_vis" type="mesh" mesh="mecanum_wheel" quat="0.707107 -0.707107 0 0" mass="0" contype="0" conaffinity="0" rgba="0.16 0.16 0.18 1"/>
+        <body name="r1_FR_roller_link" pos="0.0138072 -0.078182 0" quat="0.59836 0.33019 -0.193446 -0.703931">
+          <joint name="r1_FR_roller_joint" type="hinge" axis="0 0 1" damping="5e-5" armature="1e-5" frictionloss="1e-6"/>
+          <inertial pos="0 0 0" mass="0.10000" diaginertia="0.000142489 0.000142489 2.1218e-05"/>
+          <geom name="r1_FR_roller_link_vis" type="mesh" mesh="roller" quat="0.707107 0 -0.707107 0" mass="0" contype="0" conaffinity="0" rgba="0.55 0.57 0.62 1"/>
+          <geom name="r1_FR_roller_link_col0" type="sphere" size="0.00770" pos="0 0 -0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r1_FR_roller_link_col1" type="sphere" size="0.01860" pos="0 0 -0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r1_FR_roller_link_col2" type="sphere" size="0.02060" pos="0 0 0.00000" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r1_FR_roller_link_col3" type="sphere" size="0.01860" pos="0 0 0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r1_FR_roller_link_col4" type="sphere" size="0.00770" pos="0 0 0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+        </body>
+        <body name="r2_FR_roller_link" pos="-0.0396777 -0.0687661 0" quat="0.449285 0.196542 -0.328356 -0.807277">
+          <joint name="r2_FR_roller_joint" type="hinge" axis="0 0 1" damping="5e-5" armature="1e-5" frictionloss="1e-6"/>
+          <inertial pos="0 0 0" mass="0.10000" diaginertia="0.000142489 0.000142489 2.1218e-05"/>
+          <geom name="r2_FR_roller_link_vis" type="mesh" mesh="roller" quat="0.707107 0 -0.707107 0" mass="0" contype="0" conaffinity="0" rgba="0.55 0.57 0.62 1"/>
+          <geom name="r2_FR_roller_link_col0" type="sphere" size="0.00770" pos="0 0 -0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r2_FR_roller_link_col1" type="sphere" size="0.01860" pos="0 0 -0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r2_FR_roller_link_col2" type="sphere" size="0.02060" pos="0 0 0.00000" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r2_FR_roller_link_col3" type="sphere" size="0.01860" pos="0 0 0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r2_FR_roller_link_col4" type="sphere" size="0.00770" pos="0 0 0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+        </body>
+        <body name="r3_FR_roller_link" pos="-0.0745971 -0.0271734 0" quat="0.905031 -0.378571 -0.0559535 0.185668">
+          <joint name="r3_FR_roller_joint" type="hinge" axis="0 0 1" damping="5e-5" armature="1e-5" frictionloss="1e-6"/>
+          <inertial pos="0 0 0" mass="0.10000" diaginertia="0.000142489 0.000142489 2.1218e-05"/>
+          <geom name="r3_FR_roller_link_vis" type="mesh" mesh="roller" quat="0.707107 0 -0.707107 0" mass="0" contype="0" conaffinity="0" rgba="0.55 0.57 0.62 1"/>
+          <geom name="r3_FR_roller_link_col0" type="sphere" size="0.00770" pos="0 0 -0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r3_FR_roller_link_col1" type="sphere" size="0.01860" pos="0 0 -0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r3_FR_roller_link_col2" type="sphere" size="0.02060" pos="0 0 0.00000" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r3_FR_roller_link_col3" type="sphere" size="0.01860" pos="0 0 0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r3_FR_roller_link_col4" type="sphere" size="0.00770" pos="0 0 0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+        </body>
+        <body name="r4_FR_roller_link" pos="-0.0746116 0.0271342 0" quat="0.412828 -0.277774 -0.263227 -0.826515">
+          <joint name="r4_FR_roller_joint" type="hinge" axis="0 0 1" damping="5e-5" armature="1e-5" frictionloss="1e-6"/>
+          <inertial pos="0 0 0" mass="0.10000" diaginertia="0.000142489 0.000142489 2.1218e-05"/>
+          <geom name="r4_FR_roller_link_vis" type="mesh" mesh="roller" quat="0.707107 0 -0.707107 0" mass="0" contype="0" conaffinity="0" rgba="0.55 0.57 0.62 1"/>
+          <geom name="r4_FR_roller_link_col0" type="sphere" size="0.00770" pos="0 0 -0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r4_FR_roller_link_col1" type="sphere" size="0.01860" pos="0 0 -0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r4_FR_roller_link_col2" type="sphere" size="0.02060" pos="0 0 0.00000" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r4_FR_roller_link_col3" type="sphere" size="0.01860" pos="0 0 0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r4_FR_roller_link_col4" type="sphere" size="0.00770" pos="0 0 0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+        </body>
+        <body name="r5_FR_roller_link" pos="-0.0396803 0.0687654 0" quat="0.923877 -0.192174 0.330932 -0.0023053">
+          <joint name="r5_FR_roller_joint" type="hinge" axis="0 0 1" damping="5e-5" armature="1e-5" frictionloss="1e-6"/>
+          <inertial pos="0 0 0" mass="0.10000" diaginertia="0.000142489 0.000142489 2.1218e-05"/>
+          <geom name="r5_FR_roller_link_vis" type="mesh" mesh="roller" quat="0.707107 0 -0.707107 0" mass="0" contype="0" conaffinity="0" rgba="0.55 0.57 0.62 1"/>
+          <geom name="r5_FR_roller_link_col0" type="sphere" size="0.00770" pos="0 0 -0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r5_FR_roller_link_col1" type="sphere" size="0.01860" pos="0 0 -0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r5_FR_roller_link_col2" type="sphere" size="0.02060" pos="0 0 0.00000" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r5_FR_roller_link_col3" type="sphere" size="0.01860" pos="0 0 0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r5_FR_roller_link_col4" type="sphere" size="0.00770" pos="0 0 0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+        </body>
+        <body name="r6_FR_roller_link" pos="0.0138046 0.0781836 0" quat="0.882476 -0.0480886 0.37965 -0.273476">
+          <joint name="r6_FR_roller_joint" type="hinge" axis="0 0 1" damping="5e-5" armature="1e-5" frictionloss="1e-6"/>
+          <inertial pos="0 0 0" mass="0.10000" diaginertia="0.000142489 0.000142489 2.1218e-05"/>
+          <geom name="r6_FR_roller_link_vis" type="mesh" mesh="roller" quat="0.707107 0 -0.707107 0" mass="0" contype="0" conaffinity="0" rgba="0.55 0.57 0.62 1"/>
+          <geom name="r6_FR_roller_link_col0" type="sphere" size="0.00770" pos="0 0 -0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r6_FR_roller_link_col1" type="sphere" size="0.01860" pos="0 0 -0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r6_FR_roller_link_col2" type="sphere" size="0.02060" pos="0 0 0.00000" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r6_FR_roller_link_col3" type="sphere" size="0.01860" pos="0 0 0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r6_FR_roller_link_col4" type="sphere" size="0.00770" pos="0 0 0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+        </body>
+        <body name="r7_FR_roller_link" pos="0.0608303 0.0510188 0" quat="0.885623 0.210956 0.319287 -0.263106">
+          <joint name="r7_FR_roller_joint" type="hinge" axis="0 0 1" damping="5e-5" armature="1e-5" frictionloss="1e-6"/>
+          <inertial pos="0 0 0" mass="0.10000" diaginertia="0.000142489 0.000142489 2.1218e-05"/>
+          <geom name="r7_FR_roller_link_vis" type="mesh" mesh="roller" quat="0.707107 0 -0.707107 0" mass="0" contype="0" conaffinity="0" rgba="0.55 0.57 0.62 1"/>
+          <geom name="r7_FR_roller_link_col0" type="sphere" size="0.00770" pos="0 0 -0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r7_FR_roller_link_col1" type="sphere" size="0.01860" pos="0 0 -0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r7_FR_roller_link_col2" type="sphere" size="0.02060" pos="0 0 0.00000" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r7_FR_roller_link_col3" type="sphere" size="0.01860" pos="0 0 0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r7_FR_roller_link_col4" type="sphere" size="0.00770" pos="0 0 0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+        </body>
+        <body name="r8_FR_roller_link" pos="0.0793927 2.12995e-05 0" quat="0.903557 0.374264 0.0798315 -0.192715">
+          <joint name="r8_FR_roller_joint" type="hinge" axis="0 0 1" damping="5e-5" armature="1e-5" frictionloss="1e-6"/>
+          <inertial pos="0 0 0" mass="0.10000" diaginertia="0.000142489 0.000142489 2.1218e-05"/>
+          <geom name="r8_FR_roller_link_vis" type="mesh" mesh="roller" quat="0.707107 0 -0.707107 0" mass="0" contype="0" conaffinity="0" rgba="0.55 0.57 0.62 1"/>
+          <geom name="r8_FR_roller_link_col0" type="sphere" size="0.00770" pos="0 0 -0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r8_FR_roller_link_col1" type="sphere" size="0.01860" pos="0 0 -0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r8_FR_roller_link_col2" type="sphere" size="0.02060" pos="0 0 0.00000" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r8_FR_roller_link_col3" type="sphere" size="0.01860" pos="0 0 0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r8_FR_roller_link_col4" type="sphere" size="0.00770" pos="0 0 0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+        </body>
+        <body name="r9_FR_roller_link" pos="0.0608318 -0.0510161 0" quat="0.913859 0.326107 -0.200252 -0.135701">
+          <joint name="r9_FR_roller_joint" type="hinge" axis="0 0 1" damping="5e-5" armature="1e-5" frictionloss="1e-6"/>
+          <inertial pos="0 0 0" mass="0.10000" diaginertia="0.000142489 0.000142489 2.1218e-05"/>
+          <geom name="r9_FR_roller_link_vis" type="mesh" mesh="roller" quat="0.707107 0 -0.707107 0" mass="0" contype="0" conaffinity="0" rgba="0.55 0.57 0.62 1"/>
+          <geom name="r9_FR_roller_link_col0" type="sphere" size="0.00770" pos="0 0 -0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r9_FR_roller_link_col1" type="sphere" size="0.01860" pos="0 0 -0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r9_FR_roller_link_col2" type="sphere" size="0.02060" pos="0 0 0.00000" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r9_FR_roller_link_col3" type="sphere" size="0.01860" pos="0 0 0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r9_FR_roller_link_col4" type="sphere" size="0.00770" pos="0 0 0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+        </body>
+      </body>
+      <body name="RL_wheel" pos="-0.2498 0.285 -0.056" quat="-3.05506e-08 3.05506e-08 -0.707107 0.707107">
+        <joint name="RL_wheel_joint" type="hinge" axis="0 0 1" damping="0.02" armature="0.005" frictionloss="0.005"/>
+        <inertial pos="0 0 0" mass="0.3000" diaginertia="0.00105581 0.00105581 0.0015"/>
+        <geom name="RL_hub_vis" type="mesh" mesh="mecanum_wheel" quat="0.707107 0.707107 0 0" mass="0" contype="0" conaffinity="0" rgba="0.16 0.16 0.18 1"/>
+        <body name="r1_RL_roller_link" pos="0.0138072 0.078182 0" quat="0.33019 -0.59836 -0.703931 0.193446">
+          <joint name="r1_RL_roller_joint" type="hinge" axis="0 0 1" damping="5e-5" armature="1e-5" frictionloss="1e-6"/>
+          <inertial pos="0 0 0" mass="0.10000" diaginertia="0.000142489 0.000142489 2.1218e-05"/>
+          <geom name="r1_RL_roller_link_vis" type="mesh" mesh="roller" quat="0.707107 0 -0.707107 0" mass="0" contype="0" conaffinity="0" rgba="0.55 0.57 0.62 1"/>
+          <geom name="r1_RL_roller_link_col0" type="sphere" size="0.00770" pos="0 0 -0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r1_RL_roller_link_col1" type="sphere" size="0.01860" pos="0 0 -0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r1_RL_roller_link_col2" type="sphere" size="0.02060" pos="0 0 0.00000" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r1_RL_roller_link_col3" type="sphere" size="0.01860" pos="0 0 0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r1_RL_roller_link_col4" type="sphere" size="0.00770" pos="0 0 0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+        </body>
+        <body name="r2_RL_roller_link" pos="-0.0396777 0.0687661 0" quat="0.196542 -0.449285 -0.807277 0.328356">
+          <joint name="r2_RL_roller_joint" type="hinge" axis="0 0 1" damping="5e-5" armature="1e-5" frictionloss="1e-6"/>
+          <inertial pos="0 0 0" mass="0.10000" diaginertia="0.000142489 0.000142489 2.1218e-05"/>
+          <geom name="r2_RL_roller_link_vis" type="mesh" mesh="roller" quat="0.707107 0 -0.707107 0" mass="0" contype="0" conaffinity="0" rgba="0.55 0.57 0.62 1"/>
+          <geom name="r2_RL_roller_link_col0" type="sphere" size="0.00770" pos="0 0 -0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r2_RL_roller_link_col1" type="sphere" size="0.01860" pos="0 0 -0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r2_RL_roller_link_col2" type="sphere" size="0.02060" pos="0 0 0.00000" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r2_RL_roller_link_col3" type="sphere" size="0.01860" pos="0 0 0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r2_RL_roller_link_col4" type="sphere" size="0.00770" pos="0 0 0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+        </body>
+        <body name="r3_RL_roller_link" pos="-0.0745971 0.0271734 0" quat="0.378571 0.905031 -0.185668 -0.0559535">
+          <joint name="r3_RL_roller_joint" type="hinge" axis="0 0 1" damping="5e-5" armature="1e-5" frictionloss="1e-6"/>
+          <inertial pos="0 0 0" mass="0.10000" diaginertia="0.000142489 0.000142489 2.1218e-05"/>
+          <geom name="r3_RL_roller_link_vis" type="mesh" mesh="roller" quat="0.707107 0 -0.707107 0" mass="0" contype="0" conaffinity="0" rgba="0.55 0.57 0.62 1"/>
+          <geom name="r3_RL_roller_link_col0" type="sphere" size="0.00770" pos="0 0 -0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r3_RL_roller_link_col1" type="sphere" size="0.01860" pos="0 0 -0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r3_RL_roller_link_col2" type="sphere" size="0.02060" pos="0 0 0.00000" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r3_RL_roller_link_col3" type="sphere" size="0.01860" pos="0 0 0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r3_RL_roller_link_col4" type="sphere" size="0.00770" pos="0 0 0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+        </body>
+        <body name="r4_RL_roller_link" pos="-0.0746116 -0.0271342 0" quat="-0.277774 -0.412828 -0.826515 0.263227">
+          <joint name="r4_RL_roller_joint" type="hinge" axis="0 0 1" damping="5e-5" armature="1e-5" frictionloss="1e-6"/>
+          <inertial pos="0 0 0" mass="0.10000" diaginertia="0.000142489 0.000142489 2.1218e-05"/>
+          <geom name="r4_RL_roller_link_vis" type="mesh" mesh="roller" quat="0.707107 0 -0.707107 0" mass="0" contype="0" conaffinity="0" rgba="0.55 0.57 0.62 1"/>
+          <geom name="r4_RL_roller_link_col0" type="sphere" size="0.00770" pos="0 0 -0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r4_RL_roller_link_col1" type="sphere" size="0.01860" pos="0 0 -0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r4_RL_roller_link_col2" type="sphere" size="0.02060" pos="0 0 0.00000" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r4_RL_roller_link_col3" type="sphere" size="0.01860" pos="0 0 0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r4_RL_roller_link_col4" type="sphere" size="0.00770" pos="0 0 0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+        </body>
+        <body name="r5_RL_roller_link" pos="-0.0396803 -0.0687654 0" quat="0.192174 0.923877 0.0023053 0.330932">
+          <joint name="r5_RL_roller_joint" type="hinge" axis="0 0 1" damping="5e-5" armature="1e-5" frictionloss="1e-6"/>
+          <inertial pos="0 0 0" mass="0.10000" diaginertia="0.000142489 0.000142489 2.1218e-05"/>
+          <geom name="r5_RL_roller_link_vis" type="mesh" mesh="roller" quat="0.707107 0 -0.707107 0" mass="0" contype="0" conaffinity="0" rgba="0.55 0.57 0.62 1"/>
+          <geom name="r5_RL_roller_link_col0" type="sphere" size="0.00770" pos="0 0 -0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r5_RL_roller_link_col1" type="sphere" size="0.01860" pos="0 0 -0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r5_RL_roller_link_col2" type="sphere" size="0.02060" pos="0 0 0.00000" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r5_RL_roller_link_col3" type="sphere" size="0.01860" pos="0 0 0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r5_RL_roller_link_col4" type="sphere" size="0.00770" pos="0 0 0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+        </body>
+        <body name="r6_RL_roller_link" pos="0.0138046 -0.0781836 0" quat="0.0480886 0.882476 0.273476 0.37965">
+          <joint name="r6_RL_roller_joint" type="hinge" axis="0 0 1" damping="5e-5" armature="1e-5" frictionloss="1e-6"/>
+          <inertial pos="0 0 0" mass="0.10000" diaginertia="0.000142489 0.000142489 2.1218e-05"/>
+          <geom name="r6_RL_roller_link_vis" type="mesh" mesh="roller" quat="0.707107 0 -0.707107 0" mass="0" contype="0" conaffinity="0" rgba="0.55 0.57 0.62 1"/>
+          <geom name="r6_RL_roller_link_col0" type="sphere" size="0.00770" pos="0 0 -0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r6_RL_roller_link_col1" type="sphere" size="0.01860" pos="0 0 -0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r6_RL_roller_link_col2" type="sphere" size="0.02060" pos="0 0 0.00000" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r6_RL_roller_link_col3" type="sphere" size="0.01860" pos="0 0 0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r6_RL_roller_link_col4" type="sphere" size="0.00770" pos="0 0 0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+        </body>
+        <body name="r7_RL_roller_link" pos="0.0608303 -0.0510188 0" quat="0.210956 -0.885623 -0.263106 -0.319287">
+          <joint name="r7_RL_roller_joint" type="hinge" axis="0 0 1" damping="5e-5" armature="1e-5" frictionloss="1e-6"/>
+          <inertial pos="0 0 0" mass="0.10000" diaginertia="0.000142489 0.000142489 2.1218e-05"/>
+          <geom name="r7_RL_roller_link_vis" type="mesh" mesh="roller" quat="0.707107 0 -0.707107 0" mass="0" contype="0" conaffinity="0" rgba="0.55 0.57 0.62 1"/>
+          <geom name="r7_RL_roller_link_col0" type="sphere" size="0.00770" pos="0 0 -0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r7_RL_roller_link_col1" type="sphere" size="0.01860" pos="0 0 -0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r7_RL_roller_link_col2" type="sphere" size="0.02060" pos="0 0 0.00000" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r7_RL_roller_link_col3" type="sphere" size="0.01860" pos="0 0 0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r7_RL_roller_link_col4" type="sphere" size="0.00770" pos="0 0 0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+        </body>
+        <body name="r8_RL_roller_link" pos="0.0793927 -2.12995e-05 0" quat="0.374264 -0.903557 -0.192715 -0.0798315">
+          <joint name="r8_RL_roller_joint" type="hinge" axis="0 0 1" damping="5e-5" armature="1e-5" frictionloss="1e-6"/>
+          <inertial pos="0 0 0" mass="0.10000" diaginertia="0.000142489 0.000142489 2.1218e-05"/>
+          <geom name="r8_RL_roller_link_vis" type="mesh" mesh="roller" quat="0.707107 0 -0.707107 0" mass="0" contype="0" conaffinity="0" rgba="0.55 0.57 0.62 1"/>
+          <geom name="r8_RL_roller_link_col0" type="sphere" size="0.00770" pos="0 0 -0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r8_RL_roller_link_col1" type="sphere" size="0.01860" pos="0 0 -0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r8_RL_roller_link_col2" type="sphere" size="0.02060" pos="0 0 0.00000" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r8_RL_roller_link_col3" type="sphere" size="0.01860" pos="0 0 0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r8_RL_roller_link_col4" type="sphere" size="0.00770" pos="0 0 0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+        </body>
+        <body name="r9_RL_roller_link" pos="0.0608318 0.0510161 0" quat="0.326107 -0.913859 -0.135701 0.200252">
+          <joint name="r9_RL_roller_joint" type="hinge" axis="0 0 1" damping="5e-5" armature="1e-5" frictionloss="1e-6"/>
+          <inertial pos="0 0 0" mass="0.10000" diaginertia="0.000142489 0.000142489 2.1218e-05"/>
+          <geom name="r9_RL_roller_link_vis" type="mesh" mesh="roller" quat="0.707107 0 -0.707107 0" mass="0" contype="0" conaffinity="0" rgba="0.55 0.57 0.62 1"/>
+          <geom name="r9_RL_roller_link_col0" type="sphere" size="0.00770" pos="0 0 -0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r9_RL_roller_link_col1" type="sphere" size="0.01860" pos="0 0 -0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r9_RL_roller_link_col2" type="sphere" size="0.02060" pos="0 0 0.00000" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r9_RL_roller_link_col3" type="sphere" size="0.01860" pos="0 0 0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r9_RL_roller_link_col4" type="sphere" size="0.00770" pos="0 0 0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+        </body>
+      </body>
+      <body name="RR_wheel" pos="-0.2498 -0.285 -0.056" quat="0.707107 0.707107 0 0">
+        <joint name="RR_wheel_joint" type="hinge" axis="0 0 1" damping="0.02" armature="0.005" frictionloss="0.005"/>
+        <inertial pos="0 0 0" mass="0.3000" diaginertia="0.00105581 0.00105581 0.0015"/>
+        <geom name="RR_hub_vis" type="mesh" mesh="mecanum_wheel" quat="0.707107 -0.707107 0 0" mass="0" contype="0" conaffinity="0" rgba="0.16 0.16 0.18 1"/>
+        <body name="r1_RR_roller_link" pos="0.060796 0.05106 0" quat="-0.270317 -0.0795532 -0.920448 0.270878">
+          <joint name="r1_RR_roller_joint" type="hinge" axis="0 0 1" damping="5e-5" armature="1e-5" frictionloss="1e-6"/>
+          <inertial pos="0 0 0" mass="0.10000" diaginertia="0.000142489 0.000142489 2.1218e-05"/>
+          <geom name="r1_RR_roller_link_vis" type="mesh" mesh="roller" quat="0.707107 0 -0.707107 0" mass="0" contype="0" conaffinity="0" rgba="0.55 0.57 0.62 1"/>
+          <geom name="r1_RR_roller_link_col0" type="sphere" size="0.00770" pos="0 0 -0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r1_RR_roller_link_col1" type="sphere" size="0.01860" pos="0 0 -0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r1_RR_roller_link_col2" type="sphere" size="0.02060" pos="0 0 0.00000" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r1_RR_roller_link_col3" type="sphere" size="0.01860" pos="0 0 0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r1_RR_roller_link_col4" type="sphere" size="0.00770" pos="0 0 0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+        </body>
+        <body name="r2_RR_roller_link" pos="0.079392 3.584e-05 0" quat="9.9396e-07 -9.9396e-07 -0.923879 0.382684">
+          <joint name="r2_RR_roller_joint" type="hinge" axis="0 0 1" damping="5e-5" armature="1e-5" frictionloss="1e-6"/>
+          <inertial pos="0 0 0" mass="0.10000" diaginertia="0.000142489 0.000142489 2.1218e-05"/>
+          <geom name="r2_RR_roller_link_vis" type="mesh" mesh="roller" quat="0.707107 0 -0.707107 0" mass="0" contype="0" conaffinity="0" rgba="0.55 0.57 0.62 1"/>
+          <geom name="r2_RR_roller_link_col0" type="sphere" size="0.00770" pos="0 0 -0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r2_RR_roller_link_col1" type="sphere" size="0.01860" pos="0 0 -0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r2_RR_roller_link_col2" type="sphere" size="0.02060" pos="0 0 0.00000" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r2_RR_roller_link_col3" type="sphere" size="0.01860" pos="0 0 0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r2_RR_roller_link_col4" type="sphere" size="0.00770" pos="0 0 0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+        </body>
+        <body name="r3_RR_roller_link" pos="0.060842 -0.051004 0" quat="0.270319 0.0795535 -0.920445 0.270888">
+          <joint name="r3_RR_roller_joint" type="hinge" axis="0 0 1" damping="5e-5" armature="1e-5" frictionloss="1e-6"/>
+          <inertial pos="0 0 0" mass="0.10000" diaginertia="0.000142489 0.000142489 2.1218e-05"/>
+          <geom name="r3_RR_roller_link_vis" type="mesh" mesh="roller" quat="0.707107 0 -0.707107 0" mass="0" contype="0" conaffinity="0" rgba="0.55 0.57 0.62 1"/>
+          <geom name="r3_RR_roller_link_col0" type="sphere" size="0.00770" pos="0 0 -0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r3_RR_roller_link_col1" type="sphere" size="0.01860" pos="0 0 -0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r3_RR_roller_link_col2" type="sphere" size="0.02060" pos="0 0 0.00000" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r3_RR_roller_link_col3" type="sphere" size="0.01860" pos="0 0 0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r3_RR_roller_link_col4" type="sphere" size="0.00770" pos="0 0 0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+        </body>
+        <body name="r4_RR_roller_link" pos="0.0138214 -0.07818 0" quat="0.378408 0.0233207 -0.923592 0.0569243">
+          <joint name="r4_RR_roller_joint" type="hinge" axis="0 0 1" damping="5e-5" armature="1e-5" frictionloss="1e-6"/>
+          <inertial pos="0 0 0" mass="0.10000" diaginertia="0.000142489 0.000142489 2.1218e-05"/>
+          <geom name="r4_RR_roller_link_vis" type="mesh" mesh="roller" quat="0.707107 0 -0.707107 0" mass="0" contype="0" conaffinity="0" rgba="0.55 0.57 0.62 1"/>
+          <geom name="r4_RR_roller_link_col0" type="sphere" size="0.00770" pos="0 0 -0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r4_RR_roller_link_col1" type="sphere" size="0.01860" pos="0 0 -0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r4_RR_roller_link_col2" type="sphere" size="0.02060" pos="0 0 0.00000" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r4_RR_roller_link_col3" type="sphere" size="0.01860" pos="0 0 0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r4_RR_roller_link_col4" type="sphere" size="0.00770" pos="0 0 0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+        </body>
+        <body name="r5_RR_roller_link" pos="-0.039666 -0.068774 0" quat="-0.34364 0.0627751 0.921748 0.168377">
+          <joint name="r5_RR_roller_joint" type="hinge" axis="0 0 1" damping="5e-5" armature="1e-5" frictionloss="1e-6"/>
+          <inertial pos="0 0 0" mass="0.10000" diaginertia="0.000142489 0.000142489 2.1218e-05"/>
+          <geom name="r5_RR_roller_link_vis" type="mesh" mesh="roller" quat="0.707107 0 -0.707107 0" mass="0" contype="0" conaffinity="0" rgba="0.55 0.57 0.62 1"/>
+          <geom name="r5_RR_roller_link_col0" type="sphere" size="0.00770" pos="0 0 -0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r5_RR_roller_link_col1" type="sphere" size="0.01860" pos="0 0 -0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r5_RR_roller_link_col2" type="sphere" size="0.02060" pos="0 0 0.00000" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r5_RR_roller_link_col3" type="sphere" size="0.01860" pos="0 0 0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r5_RR_roller_link_col4" type="sphere" size="0.00770" pos="0 0 0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+        </body>
+        <body name="r6_RR_roller_link" pos="-0.074592 -0.027186 0" quat="-0.153344 0.0583141 0.922035 0.350624">
+          <joint name="r6_RR_roller_joint" type="hinge" axis="0 0 1" damping="5e-5" armature="1e-5" frictionloss="1e-6"/>
+          <inertial pos="0 0 0" mass="0.10000" diaginertia="0.000142489 0.000142489 2.1218e-05"/>
+          <geom name="r6_RR_roller_link_vis" type="mesh" mesh="roller" quat="0.707107 0 -0.707107 0" mass="0" contype="0" conaffinity="0" rgba="0.55 0.57 0.62 1"/>
+          <geom name="r6_RR_roller_link_col0" type="sphere" size="0.00770" pos="0 0 -0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r6_RR_roller_link_col1" type="sphere" size="0.01860" pos="0 0 -0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r6_RR_roller_link_col2" type="sphere" size="0.02060" pos="0 0 0.00000" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r6_RR_roller_link_col3" type="sphere" size="0.01860" pos="0 0 0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r6_RR_roller_link_col4" type="sphere" size="0.00770" pos="0 0 0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+        </body>
+        <body name="r7_RR_roller_link" pos="-0.074616 0.02712 0" quat="0.92204 0.350632 -0.153298 0.0582973">
+          <joint name="r7_RR_roller_joint" type="hinge" axis="0 0 1" damping="5e-5" armature="1e-5" frictionloss="1e-6"/>
+          <inertial pos="0 0 0" mass="0.10000" diaginertia="0.000142489 0.000142489 2.1218e-05"/>
+          <geom name="r7_RR_roller_link_vis" type="mesh" mesh="roller" quat="0.707107 0 -0.707107 0" mass="0" contype="0" conaffinity="0" rgba="0.55 0.57 0.62 1"/>
+          <geom name="r7_RR_roller_link_col0" type="sphere" size="0.00770" pos="0 0 -0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r7_RR_roller_link_col1" type="sphere" size="0.01860" pos="0 0 -0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r7_RR_roller_link_col2" type="sphere" size="0.02060" pos="0 0 0.00000" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r7_RR_roller_link_col3" type="sphere" size="0.01860" pos="0 0 0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r7_RR_roller_link_col4" type="sphere" size="0.00770" pos="0 0 0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+        </body>
+        <body name="r8_RR_roller_link" pos="-0.039726 0.068738 0" quat="0.921747 0.168386 -0.343639 0.0627785">
+          <joint name="r8_RR_roller_joint" type="hinge" axis="0 0 1" damping="5e-5" armature="1e-5" frictionloss="1e-6"/>
+          <inertial pos="0 0 0" mass="0.10000" diaginertia="0.000142489 0.000142489 2.1218e-05"/>
+          <geom name="r8_RR_roller_link_vis" type="mesh" mesh="roller" quat="0.707107 0 -0.707107 0" mass="0" contype="0" conaffinity="0" rgba="0.55 0.57 0.62 1"/>
+          <geom name="r8_RR_roller_link_col0" type="sphere" size="0.00770" pos="0 0 -0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r8_RR_roller_link_col1" type="sphere" size="0.01860" pos="0 0 -0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r8_RR_roller_link_col2" type="sphere" size="0.02060" pos="0 0 0.00000" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r8_RR_roller_link_col3" type="sphere" size="0.01860" pos="0 0 0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r8_RR_roller_link_col4" type="sphere" size="0.00770" pos="0 0 0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+        </body>
+        <body name="r9_RR_roller_link" pos="0.0137518 0.078192 0" quat="0.923593 -0.0569151 -0.378408 -0.0233169">
+          <joint name="r9_RR_roller_joint" type="hinge" axis="0 0 1" damping="5e-5" armature="1e-5" frictionloss="1e-6"/>
+          <inertial pos="0 0 0" mass="0.10000" diaginertia="0.000142489 0.000142489 2.1218e-05"/>
+          <geom name="r9_RR_roller_link_vis" type="mesh" mesh="roller" quat="0.707107 0 -0.707107 0" mass="0" contype="0" conaffinity="0" rgba="0.55 0.57 0.62 1"/>
+          <geom name="r9_RR_roller_link_col0" type="sphere" size="0.00770" pos="0 0 -0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r9_RR_roller_link_col1" type="sphere" size="0.01860" pos="0 0 -0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r9_RR_roller_link_col2" type="sphere" size="0.02060" pos="0 0 0.00000" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r9_RR_roller_link_col3" type="sphere" size="0.01860" pos="0 0 0.02830" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+          <geom name="r9_RR_roller_link_col4" type="sphere" size="0.00770" pos="0 0 0.05660" mass="0" condim="3" friction="1.4 0.01 0.001" contype="4" conaffinity="2" group="3"/>
+        </body>
+      </body>
+    </body>
+    <body name="ball" pos="-5.000 0 0.600">
+      <freejoint name="ball_free"/>
+      <inertial pos="0 0 0" mass="0.057" diaginertia="2.55873e-05 2.55873e-05 2.55873e-05"/>
+      <geom name="ball" type="sphere" size="0.0335" mass="0" friction="0.8 0.01 0.001" solref="0.003 1" contype="2" conaffinity="29" rgba="0.85 0.82 0.25 1"/>
+    </body>
+  </worldbody>
+  <actuator>
+    <motor name="FL_drive" joint="FL_wheel_joint" gear="1" ctrlrange="-12 12" forcerange="-12 12"/>
+    <motor name="FR_drive" joint="FR_wheel_joint" gear="1" ctrlrange="-12 12" forcerange="-12 12"/>
+    <motor name="RL_drive" joint="RL_wheel_joint" gear="1" ctrlrange="-12 12" forcerange="-12 12"/>
+    <motor name="RR_drive" joint="RR_wheel_joint" gear="1" ctrlrange="-12 12" forcerange="-12 12"/>
+  </actuator>
+  <sensor>
+    <jointvel joint="FL_wheel_joint" name="FL_wheel_vel"/>
+    <jointvel joint="FR_wheel_joint" name="FR_wheel_vel"/>
+    <jointvel joint="RL_wheel_joint" name="RL_wheel_vel"/>
+    <jointvel joint="RR_wheel_joint" name="RR_wheel_vel"/>
+    <framepos objtype="body" objname="base" name="base_pos"/>
+    <framequat objtype="body" objname="base" name="base_quat"/>
+    <framelinvel objtype="body" objname="base" name="base_linvel"/>
+    <accelerometer site="imu" name="imu_acc"/>
+    <gyro site="imu" name="imu_gyro"/>
+    <frameangvel objtype="site" objname="imu" name="imu_angvel_world"/>
+  </sensor>
+  <contact>
+    <pair geom1="ball" geom2="ground_col" condim="3" friction="0.8 0.01 0.001" solref="0.0015 0.3"/>
+  </contact>
+</mujoco>

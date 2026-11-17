@@ -15,6 +15,8 @@ publish    /tf                tf2_msgs/TFMessage         odom->base_link, base_l
 publish    /joint_states      sensor_msgs/JointState     four wheel joints
 publish    /clock             rosgraph_msgs/Clock
 
+service    /rally/serve        std_srvs/Trigger            spawn one legal serve
+
 Frames
 ------
 odom        the pose the robot had when the bridge finished settling: origin at
@@ -39,6 +41,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import math
+import random
 import time
 
 import motrixsim
@@ -51,6 +54,7 @@ from rclpy.node import Node
 from rosgraph_msgs.msg import Clock
 from sensor_msgs.msg import Imu, JointState
 from std_msgs.msg import Float64MultiArray
+from std_srvs.srv import Trigger
 from tf2_msgs.msg import TFMessage
 
 XML = "rally_court.xml"
@@ -72,6 +76,83 @@ PUB_HZ = 120.0
 M = np.array([[0.0, -1.0, 0.0],
               [1.0, 0.0, 0.0],
               [0.0, 0.0, 1.0]])
+
+
+# ------------------------------------------------------------------ ball model
+BALL_R = 0.0335                  # m, ball radius (MJCF)
+COURT_X, SINGLES_Y = 11.885, 4.115
+SERVICE_X = 6.4                  # service line, |x|
+NET_TOP = 1.07                   # net collision box top (flat in the MJCF)
+GRAV = np.array([0.0, 0.0, -9.81])
+# aerodynamic drag of a tennis ball: 0.5 * rho * Cd * A / m  [1/m]
+# rho 1.2 kg/m3, Cd 0.6, A = pi r^2, m 0.057 kg.  The MJCF has no fluid model,
+# so the bridge applies this to the ball every step (and the serve solver uses it)
+DRAG_K = 0.5 * 1.2 * 0.6 * math.pi * BALL_R ** 2 / 0.057
+
+
+def fly_step(p, v, h):
+    """One explicit step of the drag-affected flight."""
+    speed = float(np.linalg.norm(v))
+    return p + v * h, v + (GRAV - DRAG_K * speed * v) * h
+
+
+def fly(p, v, duration, steps=400):
+    h = duration / steps
+    for _ in range(steps):
+        p, v = fly_step(p, v, h)
+    return p, v
+
+
+def solve_launch(spawn, target, tf):
+    """Launch velocity that carries the ball from spawn to target in exactly tf s."""
+    v = (target - spawn) / tf - 0.5 * GRAV * tf
+    for _ in range(6):
+        p, _ = fly(spawn, v, tf, 400)
+        err = p - target
+        if np.linalg.norm(err) < 2e-3:
+            break
+        J = np.empty((3, 3))
+        for i in range(3):
+            dv = np.zeros(3)
+            dv[i] = 1e-2
+            J[:, i] = (fly(spawn, v + dv, tf, 400)[0] - p) / 1e-2
+        v = v - np.linalg.solve(J, err)
+    return v
+
+
+def net_clearance(spawn, v, duration):
+    """Ball surface clearance over the net box at x = 0 (None if it never crosses)."""
+    h = 0.002
+    p, vv = np.array(spawn, float), np.array(v, float)
+    t, clear = 0.0, None
+    while t < duration:
+        prev = p
+        p, vv = fly_step(p, vv, h)
+        t += h
+        if prev[0] > 0.0 >= p[0] and p[0] != prev[0]:
+            u = (0.0 - prev[0]) / (p[0] - prev[0])
+            clear = float(prev[2] + u * (p[2] - prev[2])) - NET_TOP - BALL_R
+    return clear
+
+
+def random_serve(rng):
+    """A legal serve: from behind the opposite baseline, diagonally into the
+    receiving service box, over the net.  Returns (spawn, velocity, target, tf)."""
+    side = 1.0 if rng.random() < 0.5 else -1.0
+    spawn = np.array([COURT_X + rng.uniform(0.2, 1.4),      # behind the baseline
+                      side * rng.uniform(0.3, 3.8),        # between centre mark and singles line
+                      rng.uniform(2.0, 2.6)])              # racket contact height
+    target = np.array([-rng.uniform(1.2, 5.6),              # inside the service line
+                       -side * rng.uniform(0.5, 3.6),       # diagonally opposite, inside singles
+                       BALL_R])
+    tf = rng.uniform(0.62, 0.90)
+    v = solve_launch(spawn, target, tf)
+    clear = net_clearance(spawn, v, tf)
+    while clear is not None and clear < 0.10 and tf < 1.6:  # too flat: arc it higher
+        tf += 0.06
+        v = solve_launch(spawn, target, tf)
+        clear = net_clearance(spawn, v, tf)
+    return spawn, v, target, tf
 
 
 # --------------------------------------------------------------------- quats
@@ -142,6 +223,10 @@ class Bridge:
         self.cmd_time = -1e9
         self.wheel_cmd = np.zeros(4)        # wheel rad/s, FL FR RL RR
         self.wheel_time = -1e9
+        self.ball = model.get_body("ball")
+        self.ball_fb = next(f for f in model.floating_bases if f.name == "ball_free")
+        self.rng = random.Random()
+        self.srv_serve = node.create_service(Trigger, "/rally/serve", self.on_serve)
         self.t = 0.0
         self.v_cmd = np.zeros(3)
         self.p_start = np.zeros(3)
@@ -176,6 +261,34 @@ class Bridge:
         self.cmd = np.array([msg.linear.x, msg.linear.y, msg.angular.z], dtype=float)
         self.cmd_time = self.t
 
+    def on_serve(self, request, response):
+        spawn, v, target, tf = self.serve()
+        msg = (f"spawn ({spawn[0]:.2f}, {spawn[1]:.2f}, {spawn[2]:.2f}) -> "
+               f"target ({target[0]:.2f}, {target[1]:.2f}) v {np.round(v, 2)} tf {tf:.2f}s")
+        self.node.get_logger().info(f"serve: {msg}")
+        response.success = True
+        response.message = msg
+        return response
+
+    def serve(self, seed: int | None = None):
+        """Spawn one legal serve from the opposite half and start it flying."""
+        rng = random.Random(seed) if seed is not None else self.rng
+        spawn, v, target, tf = random_serve(rng)
+        self.ball_fb.set_translation(self.d, spawn.astype(np.float32))
+        self.ball_fb.set_rotation(self.d, np.array([1.0, 0.0, 0.0, 0.0], np.float32))
+        self.ball_fb.set_global_linear_velocity(self.d, v.astype(np.float32))
+        self.ball_fb.set_global_angular_velocity(self.d, np.zeros(3, np.float32))
+        self.m.forward_kinematic(self.d)
+        return spawn, v, target, tf
+
+    def _drag(self) -> None:
+        """Quadratic air drag on the ball (the MJCF has no fluid model)."""
+        v = self.ball_fb.get_global_linear_velocity(self.d)
+        speed = float(np.linalg.norm(v))
+        if speed > 1e-3:
+            self.ball_fb.set_global_linear_velocity(
+                self.d, (v - (DRAG_K * speed * v) * self.dt).astype(np.float32))
+
     # ------------------------------------------------------------------ state
     def pose(self):
         p = np.ravel(self.m.get_link_poses(self.d)[self.base])
@@ -192,6 +305,7 @@ class Bridge:
     def step(self, control: bool = True) -> None:
         if control:
             self.control()
+        self._drag()
         self.m.step(self.d)
         self.t += self.dt
 

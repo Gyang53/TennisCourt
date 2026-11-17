@@ -66,10 +66,10 @@ model = motrixsim.load_model("rally_court.xml")   # MJCF 文件路径
 data = motrixsim.SceneData(model)                 # 仿真状态
 model.forward_kinematic(data)                     # 必须先算一次，否则 link poses 全是 0
 
-for _ in range(500):                              # 500 × 0.002 s = 1 s
+for _ in range(2000):                             # 2000 × 0.0005 s = 1 s
     motrixsim.step(model, data)                   # 或 model.step(data)
 
-print(model.options.timestep)                     # 0.002 -> 500 Hz
+print(model.options.timestep)                     # 0.0005 -> 2000 Hz
 print(model.link_names[:3], model.num_dof_pos)    # 42 links, 54 dofs
 ```
 
@@ -127,7 +127,7 @@ with mr.RenderApp(headless=False, fps=60) as app:
     cam = app.system_camera
     cam.set_view(lookat=(-11.885, 0, 0.15), distance=2.4, elevation=-22, azimuth=120)
     while True:
-        for _ in range(8):               # 60 fps 下每帧推进 8 × 0.002 s
+        for _ in range(33):              # 60 fps 下每帧推进 33 × 0.0005 s
             model.step(data)
         app.sync(data)                   # 把状态刷到渲染器
 ```
@@ -255,7 +255,7 @@ while rclpy.ok():
 - **时间戳用仿真时间**，与 `/clock` 一致，下游 `use_sim_time` 才对得上；
 - **deadman 用仿真时间**算（0.5 s 无消息停车），暂停仿真时不会误触发；
 - 传感器数据全部走模型内 sensor，不自己差分（`framequat` 比"位姿差分"稳得多）；
-- 帧率 != 物理频率：物理 500 Hz、渲染 60 Hz、发布 120 Hz，三个独立累加器。
+- 帧率 != 物理频率：物理 2000 Hz、渲染 60 Hz、发布 120 Hz，三个独立累加器。
 
 实测：`/imu/data_raw` 119.6–122.4 Hz、静止 `(0, 0, −9.810)`；`/odom` 静止漂移 µm 级；`cmd_vel` 前后左右和自转方向全部对得上。
 
@@ -282,8 +282,8 @@ while rclpy.ok():
 
 | 建议 | 理由 |
 |---|---|
-| 物理 `dt=0.002`（500 Hz），渲染 60 Hz | 36 个辊子的小惯量需要高频积分，否则接触发散；渲染不必跟着 500 Hz |
-| 发布频率单独限流（120 Hz） | ROS 侧 500 Hz 桥接会拖垮 Python 回调 |
+| 物理 `dt` 由**最快的物体**决定：0.0005 s（2000 Hz） | 发球 20–25 m/s 时，2 ms 一步会走 50 mm（超过球半径 33.5 mm），球直接穿过或陷进球场；0.5 ms 一步只走 10–12 mm |
+| 渲染 60 Hz / 发布 120 Hz，与物理解耦 | 2000 Hz 全部喂给 ROS 回调只会拖垮 Python；三个独立累加器 |
 | 传感器读值，不做数值差分 | `framequat`/`gyro`/`accelerometer` 都是解析量，差分噪声大一个量级 |
 | 结构性改动走生成器 | 视觉/碰撞/inertial 三份数据必须同步 |
 | 验证优先用数字 | 位置、速度、包围盒、姿态四元数都能断言；截图只作辅助 |

@@ -1,6 +1,6 @@
 <mujoco model="rallycourt_mecanum_robot">
   <compiler angle="radian" autolimits="true"/>
-  <option timestep="0.002" iterations="120" tolerance="1e-8" gravity="0 0 -9.81"/>
+  <option timestep="0.0005" iterations="120" tolerance="1e-8" gravity="0 0 -9.81"/>
   <asset><texture type="skybox" builtin="gradient" rgb1="0.42 0.55 0.72" rgb2="0.86 0.88 0.92" width="512" height="512"/></asset>
   <default>
     <geom friction="1.0 0.01 0.001" solref="0.004 1"/>

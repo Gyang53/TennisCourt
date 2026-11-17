@@ -53,6 +53,7 @@ the net, and holds still until a `cmd_vel` arrives.
 | `/tf` | pub | `tf2_msgs/TFMessage` | `odom -> base_link`, `base_link -> imu_link` |
 | `/joint_states` | pub | `sensor_msgs/JointState` | the four wheel joints |
 | `/clock` | pub | `rosgraph_msgs/Clock` | simulation time |
+| `/rally/serve` | srv | `std_srvs/Trigger` | spawn one legal serve from the opposite half: random spawn behind the far baseline, diagonal into the receiving service box, clears the net, first bounce inside the singles lines |
 
 ```bash
 ros2 topic echo /imu/data_raw --field linear_acceleration
@@ -72,6 +73,18 @@ coincident with `base_link`.
 Wheel targets are wheel angular speed in rad/s, not tread speed: 5 rad/s on all four wheels
 drives the body right at ~0.50 m/s (measured gains: body x 0.09958 m/s, y 0.09712 m/s,
 yaw 0.18613 rad/s per wheel rad/s).
+
+```bash
+ros2 service call /rally/serve std_srvs/srv/Trigger
+```
+
+The serve solves a drag-affected launch (rho 1.2, Cd 0.6, m 0.057 kg) that passes through a
+random legal bounce point in `tf` seconds, arcing it higher until it clears the net box by
+10 cm; measured landing error 3-4 cm over ten serves. The bridge applies the same quadratic
+drag to the ball every step (the MJCF has no fluid model). The ball bounces off the court
+with COR ~0.6 (contact pair `ball`/`ground_col`, `solref="0.0015 0.3"`), which is why the
+model runs at `timestep="0.0005"`: at 2 ms a 20 m/s ball moves 50 mm per step, more than its
+33.5 mm radius, and tunnels through the court.
 
 Not implemented: the `/mecanum/goal` point controller — this bridge only takes velocity
 commands. The wheel feedforward gains were measured on this model

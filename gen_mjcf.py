@@ -137,7 +137,9 @@ def main(out_path, court=None):
     a = L.append
     a('<mujoco model="rallycourt_mecanum_robot">')
     a('  <compiler angle="radian" autolimits="true"/>')
-    a('  <option timestep="0.002" iterations="120" tolerance="1e-8" gravity="0 0 -9.81"/>')
+    # 0.5 ms: a served ball arrives at ~20-25 m/s, so a 2 ms step would move it 50 mm
+    # per step (more than its 33.5 mm radius) and it would tunnel / sink into the court
+    a('  <option timestep="0.0005" iterations="120" tolerance="1e-8" gravity="0 0 -9.81"/>')
     a('  <asset><texture type="skybox" builtin="gradient" rgb1="0.42 0.55 0.72"'
       ' rgb2="0.86 0.88 0.92" width="512" height="512"/></asset>')
     a('  <default>')
@@ -329,6 +331,13 @@ def main(out_path, court=None):
     a('    <gyro site="imu" name="imu_gyro"/>')
     a('    <frameangvel objtype="site" objname="imu" name="imu_angvel_world"/>')
     a('  </sensor>')
+    # the ball needs a real bounce; the default critically damped contact absorbs it.
+    # 1.5 ms = 3 physics steps, dampratio 0.3 -> COR ~0.63 from 10 to 20 m/s
+    if court:
+        a('  <contact>')
+        a('    <pair geom1="ball" geom2="ground_col" condim="3" friction="0.8 0.01 0.001"'
+          ' solref="0.0015 0.3"/>')
+        a('  </contact>')
     a('</mujoco>')
     xml = "\n".join(L) + "\n"
     with open(out_path, "w") as f:
