@@ -24,6 +24,8 @@
       <geom name="net_wall_px" type="box" size="0.024 0.208 0.18" pos="0.208 0 0.295" rgba="0.42 0.45 0.50 0.55" contype="16" conaffinity="1"/>
       <geom name="net_wall_nx" type="box" size="0.024 0.208 0.18" pos="-0.208 0 0.295" rgba="0.42 0.45 0.50 0.55" contype="16" conaffinity="1"/>
       <geom name="net_lip" type="box" size="0.208 0.024 0.080" pos="0 -0.208 0.195" rgba="0.42 0.45 0.50 0.55" contype="16" conaffinity="1"/>
+      <camera name="LeftCam" pos="0.200 -0.190 0.210" xyaxes="-1 0 0 0 0 1" fovy="57.47"/>
+      <camera name="RightCam" pos="-0.200 -0.190 0.210" xyaxes="-1 0 0 0 0 1" fovy="57.47"/>
       <geom name="post_nxny" type="capsule" size="0.008 0.230" pos="-0.200 -0.200 0.245" rgba="0.9 0.9 0.92 1" contype="16" conaffinity="1"/>
       <geom name="post_nxpy" type="capsule" size="0.008 0.230" pos="-0.200 0.200 0.245" rgba="0.9 0.9 0.92 1" contype="16" conaffinity="1"/>
       <geom name="post_pxny" type="capsule" size="0.008 0.230" pos="0.200 -0.200 0.245" rgba="0.9 0.9 0.92 1" contype="16" conaffinity="1"/>

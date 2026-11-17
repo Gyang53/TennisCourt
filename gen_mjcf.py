@@ -35,6 +35,15 @@ WALL_T = 0.03 * CAGE_S           # wall half thickness
 POST_R = 0.01 * CAGE_S           # post radius
 POST_BASE_Z = 0.015              # chassis top: posts come down onto the mecanum chassis
 POST_TOP_Z = DECK_TOP + NET_WALL_H
+
+# mono camera pair migrated from RallyCourt.usd (LeftCam / RightCam):
+# 0.27 m either side of the robot's centre line, 0.21 m above the base origin,
+# FOV 72.34 x 57.47 deg (lens 390 mm on a 570.24 mm sensor), clip start 0.01 m
+CAM_LATERAL = 0.20               # +-X in the base frame (0.27 in the USD, kept clear of the cage wall)
+CAM_FORWARD = -0.19              # on the deck at the cage opening side (-Y = facing the net)
+CAM_HEIGHT = 0.21
+CAM_FOVY = 57.47                 # vertical FOV in degrees (horizontal 72.34)
+CAM_XYAXES = "-1 0 0 0 0 1"      # camera -Z along base -Y (toward the court net), +Y up
 MASS_DECK = 6.0
 ROLLER_MASS = 0.1        # per roller
 WHEEL_HUB_MASS = 0.3     # hub, so hub + 9 rollers = 1.2 kg per wheel
@@ -233,6 +242,9 @@ def main(out_path, court=None):
     a(f'      <geom name="net_lip" type="box" size="{NET_HALF:.3f} {WALL_T:.3f} {LIP_H/2:.3f}"'
       f' pos="0 {-NET_HALF:.3f} {DECK_TOP + LIP_H/2:.3f}" rgba="0.42 0.45 0.50 0.55"'
       ' contype="16" conaffinity="1"/>')
+    for name, cx in (("LeftCam", CAM_LATERAL), ("RightCam", -CAM_LATERAL)):
+        a(f'      <camera name="{name}" pos="{cx:.3f} {CAM_FORWARD:.3f} {CAM_HEIGHT:.3f}"'
+          f' xyaxes="{CAM_XYAXES}" fovy="{CAM_FOVY}"/>')
     for sx in (-1, 1):
         for sy in (-1, 1):
             a(f'      <geom name="post_{"p" if sx>0 else "n"}x{"p" if sy>0 else "n"}y" type="capsule"'

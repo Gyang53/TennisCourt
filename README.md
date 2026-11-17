@@ -29,6 +29,15 @@ the catch-cage opening (facing `+X`) is perpendicular to the travel direction.
 * collisions: chassis box, cage (walls/lip/deck/posts), roller sphere chains fitted inside
   the barrel profile, court slab and net box
 
+## Cameras
+
+Two mono cameras migrated from the source `RallyCourt.usd` (LeftCam / RightCam):
+
+* mounted on the cage deck at the opening side, `±0.20 m` either side of the centre line,
+  `0.21 m` above the base origin, looking toward the court net
+* FOV `57.47°` vertical / `72.34°` horizontal (390 mm lens on a 570.24 mm sensor in the USD)
+* render through them with `RenderApp.get_camera(0|1)`
+
 ## Court net
 
 Tournament spec: posts 1.07 m, centre strap 0.914 m (0.156 m sag), white top band 0.06 m,
