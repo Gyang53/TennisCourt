@@ -248,7 +248,7 @@ def render_frames(net, radius, speed, clear, seed, frames=3, obs_mode="both"):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--policy", default="policies/catch_bc_A3.pt")
+    ap.add_argument("--policy", default="policies/catch_bc_spec.pt")
     ap.add_argument("--episodes", type=int, default=64)
     ap.add_argument("--radius", type=float, default=3.0)
     ap.add_argument("--speed", type=float, nargs=2, default=(16.0, 20.0))
