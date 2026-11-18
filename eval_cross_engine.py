@@ -64,7 +64,7 @@ def build_policy(ckpt: pathlib.Path):
     return act, (obs_size, act_size)
 
 
-def run(policy, num_envs: int, radius: float, speed, episodes: int) -> float:
+def run(policy, num_envs: int, radius: float, speed, rounds: int) -> float:
     env = CatchEnv(
         num_envs=num_envs,
         seed=0,
@@ -74,7 +74,7 @@ def run(policy, num_envs: int, radius: float, speed, episodes: int) -> float:
         obs_mode="state",
     )
     caught, episodes_done = 0, 0
-    for _ in range(episodes):
+    for _ in range(rounds):
         obs = env.obs()
         for _ in range(240):
             obs, _, done, info = env.step(policy(obs))
@@ -90,8 +90,10 @@ def run(policy, num_envs: int, radius: float, speed, episodes: int) -> float:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--ckpt", required=True, type=pathlib.Path)
-    parser.add_argument("--envs", type=int, default=64)
-    parser.add_argument("--episodes", type=int, default=8)
+    parser.add_argument("--envs", type=int, default=512)
+    # one round is 240 control steps per world: enough for a rate at 512 worlds,
+    # and the reference engine costs ~3.4k env-steps/s, so rounds are the budget
+    parser.add_argument("--rounds", type=int, default=2)
     args = parser.parse_args()
 
     policy, shapes = build_policy(args.ckpt)
@@ -103,7 +105,7 @@ def main() -> None:
         ("16-20 m/s, full range", 4.9, (16.0, 20.0)),
     ]
     for label, radius, speed in cases:
-        rate = run(policy, args.envs, radius, speed, args.episodes)
+        rate = run(policy, args.envs, radius, speed, args.rounds)
         print(f"{label:<28}{rate:>11.0%}")
 
 
