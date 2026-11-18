@@ -299,11 +299,15 @@ Two things do *not* work yet, both measured:
   tested implementation (MotrixLab's SKRL/RSL-RL, or UniLab) rather than more
   tuning of this one.
 * **GPU physics**. Training does use the GPU for the policy update (60k samples x
-  100 epochs: 7.6 s on the 5060 vs 12 s-class on CPU, 1.7x), which is why the card
-  draws little power: the bottleneck is the CPU physics (MotrixSim's backend is
-  Rust/CPU). `mujoco-warp` installs and Warp sees `cuda:0` (sm_120), but the wheel
-  and the installed `mujoco` are ABI-mismatched (`MjModel.has_flex_snh` missing),
-  so a GPU physics backend needs a matched mujoco/mjwarp pair first.
+  100 epochs: 7.6 s on the 5060, 1.7x over CPU), which is why the card draws little
+  power: the bottleneck is the CPU physics (MotrixSim's backend is Rust/CPU).
+  `mujoco-warp` installs and Warp enumerates `cuda:0` (sm_120), but every published
+  wheel is built against a newer MuJoCo than the released bindings here - tried
+  4.0.1/4.0.1 -> `MjModel.has_flex_snh` missing, 3.10.0.1/3.10.0 -> `nbranch`
+  missing. Getting GPU physics therefore means building mujoco + mujoco_warp from
+  one source revision (CMake + CUDA), or letting a framework pin the pair for you:
+  `uv run --extra mjwarp ... --sim mjwarp` in UniLab is exactly that, and its task
+  contract can host this environment.
 
 Training runs on the GPU when one is present (`--device cuda|cpu`, auto-detected;
 the RTX 5060 is used at capability 12.0). Note the honest split: the policy update
