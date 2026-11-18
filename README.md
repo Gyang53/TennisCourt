@@ -172,6 +172,27 @@ full-range number up, in order of impact:
    integration is at 0.11-0.14 m; a short-horizon re-plan would close it);
 2. widen the physical catchment (a funnel/backboard over the cage mouth raises
    the ceiling faster than any controller work);
+### What was tried on the fast serves (did not pay off yet)
+
+Putting the catch point and its time-to-arrival into the observation (12 -> 15
+dims), plus two predictor fixes: the forward integration was re-predicting the
+*next* bounce instead of the current descent once the ball had bounced (the
+target jumped ~5 m), and the bounce itself was sampled at 50 Hz, so the flag
+never saw the contact (now tracked per physics substep).
+
+Measured, same seeds and serve distributions:
+
+| policy | 12-16 m/s r0.5 | 12-16 m/s r1.5 | 16-20 m/s r3.0 |
+|---|---|---|---|
+| shipped (12-dim obs, old predictor) | **59%** | **34%** | 0% |
+| 15-dim obs + fixed predictor | 9% | 16% | 6% |
+
+So the fast serves did come off zero (0 -> 6%), but the easy serves collapsed:
+with the corrected predictor the scripted teacher itself only catches 2/24 at
+r0.5 (its tracking residual is 0.3-0.4 m while the window is +-0.2 m), so the
+cloned policy inherits that ceiling. The shipped policy is the 12-dim one; the
+15-dim variant and the predictor fixes are in the history, not in HEAD.
+
 3. only then PPO fine-tuning, with critic pretraining, actor lr 1e-4,
    `log_std` starting at -2.0 and the actor frozen for the first ~20 iterations
    (the naive fine-tune destroyed the cloned policy: 50% -> 1%).
