@@ -92,6 +92,10 @@ def export(net, mean: np.ndarray, std: np.ndarray, count: int, template: pathlib
         state[f"net.{k}.weight"] = module.weight.detach().cpu().clone()
         state[f"net.{k}.bias"] = module.bias.detach().cpu().clone()
     state["mean_layer.weight"] = modules[2].weight.detach().cpu().clone()
+    # the template checkpoint belongs to a from-scratch run that drifted to
+    # std ~2.7; at that width the distilled policy is drowned in noise, so the
+    # exploration band is set here instead of inherited
+    state["log_std_parameter"] = torch.full((ACT_DIM,), float(np.log(0.3)))
     state["mean_layer.bias"] = modules[2].bias.detach().cpu().clone()
     # the normalizer must match the data the policy was fitted on: fresh training
     # runs start from the checkpoint's old statistics otherwise
