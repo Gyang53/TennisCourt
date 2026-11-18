@@ -71,6 +71,21 @@ MotrixSim 后端是 **CPU 物理**（512 世界 × 42 body 把 24 核吃满，GP
 
 用法：`mxlab train task=tennis_catch/skrl.ppo sim=mujoco_warp num_envs=4096`
 
+状态：GPU 后端已跑通（`MujocoWarpBackend`，物理与策略更新都在 GPU）。实测对比（同一模型、40 子步/控制步）：
+
+| 后端 | env-steps/s | 说明 |
+|---|---|---|
+| MotrixSim（CPU） | ~3.4k | 24 核吃满，GPU 仅 ~10% |
+| mujoco_warp（GPU，4096 世界） | **~14.6k** | GPU ~41%，功率 ~47 W |
+
+调优记录（都是实测，不是估算）：
+* 接触预算直接决定耗时：`nconmax/naconmax` 128/96 → 10.8k；64/48 → **14.3k**（已采用）；32/24 → 17.7k 但余量太小
+* 每子步有 ~4 ms **固定开销**（n=64 也是 3.9 ms），所以小批量极不划算：n=512 → 3k env-steps/s，n=4096 → 14.6k
+* 求解器迭代数（120 → 10）、线搜索（`ls_iterations`）、关闭辊子碰撞，**都没有影响** —— 不是求解器瓶颈
+* 提醒：早期记的 "0.67M env-steps/s" 是**单位错误**（那是世界-子步/s，除以 40 才是 env-steps/s = 16.7k）
+
+环境：为跑 mjwarp 把 venv 的 `mujoco` 从 3.9.0 升到 4.0.1（`motrix_env_mujoco` 的精确锁被打破，但该包只服务 MuJoCo 部署/导出路径，本任务不用）。
+
 注意：为装 mjwarp 把 venv 的 `mujoco` 从 `3.9.0`（`motrix_env_mujoco` 的精确锁）升到 `4.0.1` —— 该包只服务 MuJoCo 部署/导出路径，本任务的训练与播放不走它。
 
 ### 接入时踩的坑（MotrixLab/MotrixSim 后端）
