@@ -68,14 +68,14 @@ def build_policy(ckpt: pathlib.Path):
     return act, (obs_size, act_size)
 
 
-def run(policy, num_envs: int, radius: float, speed, rounds: int) -> float:
+def run(policy, num_envs: int, radius: float, speed, rounds: int, obs_dim: int = OBS) -> float:
     env = CatchEnv(
         num_envs=num_envs,
         seed=0,
         serve_speed=speed,
         serve_clearance=(0.6, 1.0),
         radius=(radius, radius),
-        obs_mode="state",
+        obs_mode="state" if obs_dim == 12 else "both",
     )
     caught, episodes_done = 0, 0
     for _ in range(rounds):
@@ -109,7 +109,7 @@ def main() -> None:
         ("16-20 m/s, full range", 4.9, (16.0, 20.0)),
     ]
     for label, radius, speed in cases:
-        rate = run(policy, args.envs, radius, speed, args.rounds)
+        rate = run(policy, args.envs, radius, speed, args.rounds, shapes[0])
         print(f"{label:<28}{rate:>11.0%}")
 
 
