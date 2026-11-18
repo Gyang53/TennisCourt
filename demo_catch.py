@@ -15,7 +15,7 @@ import numpy as np
 import torch
 
 from catch_env import CatchEnv, OBS_MODE_FOR_DIM
-from eval_catch import load_policy
+from eval_catch import load_policy, obs_mode_of
 from train_catch import VMAX
 
 COURT_X, COURT_Y = 11.885, 5.485
@@ -175,11 +175,32 @@ def write_svg(path, ball, robot, caught, idx, ends=None):
     open(path, "w").write("\n".join(out))
 
 
-def render_frames(net, radius, speed, clear, seed, frames=3):
+def _find_catching_seed(net, radius, speed, clear, obs_mode, tries=40):
+    for seed in range(tries):
+        env = CatchEnv(num_envs=1, seed=seed, serve_speed=speed, serve_clearance=clear,
+                       radius=radius, aim=(-4.9, 0.0), obs_mode=obs_mode)
+        for _ in range(240):
+            with torch.no_grad():
+                a, _, _ = net.act(torch.from_numpy(env.obs()), deterministic=True)
+            obs, _r, done, info = env.step(a * VMAX)
+            if done[0]:
+                if info["caught"][0] > 0:
+                    return seed
+                break
+    return None
+
+
+def render_frames(net, radius, speed, clear, seed, frames=3, obs_mode="both"):
+    if seed is None or seed < 0:
+        seed = _find_catching_seed(net, radius, speed, clear, obs_mode)
+        if seed is None:
+            print("no catching episode found; skipping render")
+            return []
+        print(f"rendering catching seed {seed}")
     import motrixsim.render as mr
 
     env = CatchEnv(num_envs=1, seed=seed, serve_speed=speed, serve_clearance=clear,
-                   radius=radius, aim=(-4.9, 0.0))
+                   radius=radius, aim=(-4.9, 0.0), obs_mode=obs_mode)
     # first pass: where does the catch happen?
     obs = env.obs()
     catch_step = None
@@ -195,7 +216,7 @@ def render_frames(net, radius, speed, clear, seed, frames=3):
         return []
     targets = {max(0, catch_step - 45), max(0, catch_step - 12), catch_step}
     env = CatchEnv(num_envs=1, seed=seed, serve_speed=speed, serve_clearance=clear,
-                   radius=radius, aim=(-4.9, 0.0))
+                   radius=radius, aim=(-4.9, 0.0), obs_mode=obs_mode)
     obs = env.obs()
     saved = []
     with mr.RenderApp(headless=False, fps=60) as app:
@@ -227,27 +248,31 @@ def render_frames(net, radius, speed, clear, seed, frames=3):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--policy", default="policies/catch_bc.pt")
+    ap.add_argument("--policy", default="policies/catch_bc_A3.pt")
     ap.add_argument("--episodes", type=int, default=64)
-    ap.add_argument("--radius", type=float, default=1.5)
-    ap.add_argument("--speed", type=float, nargs=2, default=(12.0, 16.0))
-    ap.add_argument("--clearance", type=float, nargs=2, default=(0.6, 1.0))
+    ap.add_argument("--radius", type=float, default=3.0)
+    ap.add_argument("--speed", type=float, nargs=2, default=(16.0, 20.0))
+    ap.add_argument("--clearance", type=float, nargs=2, default=(0.45, 0.8))
     ap.add_argument("--render-seeds", type=int, nargs="*", default=[3, 7])
     args = ap.parse_args()
 
     net = load_policy(args.policy)
+    mode = obs_mode_of(args.policy)          # the checkpoint knows which obs it wants
     caught, ball, robot, _catch_step, _env = run_episodes(
-        net, args.episodes, (args.radius, args.radius * 0.7), args.speed, args.clearance)
+        net, args.episodes, (args.radius, args.radius * 0.7), args.speed, args.clearance,
+        obs_mode=mode)
     print(f"episodes {args.episodes}  caught {int((caught>0).sum())}  "
           f"rate {100*np.mean(caught>0):.0f}%  serve {args.speed[0]:.0f}-{args.speed[1]:.0f} m/s "
           f"radius {args.radius}")
     good = [int(k) for k in np.argsort(-caught)[:6]]
     write_svg("/home/yangg/data/tennis_robot/rl_catch_paths.svg", ball, robot, caught,
               [k for k in good if caught[k] > 0][:4])
-    print("wrote rl_catch_paths.svg")
+    write_png("/home/yangg/data/tennis_robot/rl_catch_paths.png", ball, robot, caught,
+              [k for k in good if caught[k] > 0][:4], ends=_catch_step)
+    print("wrote rl_catch_paths.svg / .png")
     for seed in args.render_seeds:
         saved = render_frames(net, (args.radius, args.radius * 0.7), args.speed,
-                              args.clearance, seed)
+                              args.clearance, seed, obs_mode=mode)
         print("frames:", saved)
 
 

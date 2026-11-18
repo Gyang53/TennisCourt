@@ -145,6 +145,27 @@ wall second at 32-48 envs, measured).
 `catch_env.py` holds the vectorised environment; `eval_catch.py` grades a policy
 with the same exact serve planner the ROS bridge uses.
 
+### Demo
+
+```bash
+# 32 serves at 16-20 m/s over the full legal box: prints the catch rate,
+# writes rl_catch_paths.png (top-down ball/robot paths, catch points) and
+# rl_catch_N.png (rendered frames of a catching episode)
+.venv/bin/python demo_catch.py --episodes 32
+
+# other distributions / the earlier policy
+.venv/bin/python demo_catch.py --episodes 32 --speed 12 16 --radius 1.5 \
+    --clearance 0.6 1.0 --policy policies/catch_bc.pt
+
+# no rendering (fast)
+.venv/bin/python demo_catch.py --episodes 64 --render-seeds
+```
+
+`--render-seeds -1` (the default in recent runs) searches for an episode that
+actually catches before rendering; `--render-seeds` with no values skips
+rendering. The policy's observation mode is picked from the checkpoint, so both
+`catch_bc.pt` (12-dim) and `catch_bc_A3.pt` (61-dim) work with the same command.
+
 Feeding the trajectory explicitly (the ball's coordinates from the serve, one
 control step at a time, no future information) was measured against the plain
 state observation, same seeds and serve distributions:
