@@ -16,6 +16,8 @@ COURT_X, SINGLES_Y = 11.885, 4.115
 SERVICE_X = 6.4                  # service line, |x|
 NET_TOP = 1.07                   # net collision box top (flat in the MJCF)
 GRAV = np.array([0.0, 0.0, -9.81])
+GRAVITY = 9.81                  # scalar form, used by the serve sampler
+START = (-11.885, 0.0)          # robot home: baseline centre
 # aerodynamic drag of a tennis ball: 0.5 * rho * Cd * A / m  [1/m]
 # rho 1.2 kg/m3, Cd 0.6, A = pi r^2, m 0.057 kg.  The MJCF has no fluid model,
 # so the bridge applies this to the ball every step (and the serve solver uses it)
@@ -152,3 +154,90 @@ def plan_serve(rng, spawn, speed, clearance, spread=0.0):
         return None, f"aimed bounce y={land[1]:.2f} is outside the singles line", None
     target = np.array([land[0], land[1], BALL_R])
     return v0, target, clear
+
+
+# ------------------------------------------------------------- serve sampling
+def clears_net(spawn, v0, need=0.15, dt=0.002, max_t=2.5):
+    """Drag-aware clearance (ball surface over the net box); rejects net clips."""
+    p = np.array(spawn, float)
+    v = np.array(v0, float)
+    t = 0.0
+    while t < max_t:
+        prev = p
+        p, v = fly_step(p, v, dt)
+        t += dt
+        if prev[0] > 0.0 >= p[0] and p[0] != prev[0]:
+            u = (0.0 - prev[0]) / (p[0] - prev[0])
+            return bool(prev[2] + u * (p[2] - prev[2]) - 1.07 - BALL_R >= need)
+    return False
+
+
+def first_catchable(spawn, v0, z_enter=0.52, dt=0.002, v_eff=3.6, t_react=0.2, max_t=4.0):
+    """First moment the ball is inside the cage window (z <= z_enter) at a point
+    the robot can reach from START - the teacher's target.
+
+    Any bounce counts.  Computed from the serve state, so it is a prediction; it
+    only has to be good enough for the teacher to arrive (the policy re-plans).
+    """
+    py, vy_ = np.array(spawn, float), np.array(v0, float)
+    t = 0.0
+    while t < max_t:
+        speed = float(np.linalg.norm(vy_))
+        vy_ = vy_ + (-DRAG_K * speed * vy_ + np.array([0.0, 0.0, -9.81])) * dt
+        py = py + vy_ * dt
+        t += dt
+        if py[2] <= BALL_R:
+            vn = -vy_[2]
+            vy_[2] = vn * bounce_cor(vn)
+            vy_[0] *= TANGENT_LOSS
+            vy_[1] *= TANGENT_LOSS
+            py[2] = BALL_R
+        if py[2] <= z_enter:
+            d = float(np.hypot(py[0] - START[0], py[1] - START[1]))
+            if d <= v_eff * max(t - t_react, 0.0):
+                return py[:2].copy(), t
+    return None, None
+
+
+def sample_serve(rng, speed_range, clearance_range, aim=(-4.9, 0.0), radius=(1.5, 1.0)):
+    """Fast approximate serve for training resets.
+
+    The first bounce is sampled around `aim` within `radius`, which controls how
+    far from the robot the ball comes down (the post-bounce flight lands ~7 m
+    past the bounce).  The serve is solved drag-free and rejected unless the
+    drag-free arc clears the net generously, so the real (drag affected) ball
+    still passes over it.  Microseconds; the exact planner in ros2_bridge is
+    used for the real serves.
+    """
+    v0 = np.array([-10.0, 0.0, 2.0])
+    spawn = np.array([COURT_X + 1.0, 0.0, 2.2])
+    for _ in range(60):
+        bx = float(np.clip(aim[0] + rng.uniform(-radius[0], radius[0]), -6.2, -1.2))
+        by = float(np.clip(aim[1] + rng.uniform(-radius[1], radius[1]), -3.6, 3.6))
+        side = -1.0 if by >= 0.0 else 1.0          # diagonal: spawn on the other side
+        spawn = np.array([COURT_X + rng.uniform(0.2, 1.4),
+                          side * rng.uniform(0.3, 3.8),
+                          rng.uniform(2.0, 2.6)])
+        target = np.array([bx, by, BALL_R])
+        speed = rng.uniform(*speed_range)
+        dx, dy = target[0] - spawn[0], target[1] - spawn[1]
+        L = math.hypot(dx, dy)
+        dz = target[2] - spawn[2]
+        disc = speed ** 4 - GRAVITY * (GRAVITY * L * L + 2.0 * dz * speed * speed)
+        if disc < 0.0:
+            continue
+        tan_t = (speed * speed - math.sqrt(disc)) / (GRAVITY * L)   # flat arc
+        elev = math.atan(tan_t)
+        v0 = np.array([speed * math.cos(elev) * dx / L,
+                       speed * math.cos(elev) * dy / L,
+                       speed * math.sin(elev)])
+        if spawn[0] * v0[0] >= 0.0:
+            continue
+        # net clearance integrated with the real drag: a serve that clips the net
+        # dies there, its engine trajectory leaves the analytic model, and that
+        # would poison both the teacher target and the labels
+        if not clears_net(spawn, v0, rng.uniform(*clearance_range)):
+            continue
+        return spawn, v0
+    return spawn, v0
+

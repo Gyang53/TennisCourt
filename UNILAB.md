@@ -55,6 +55,33 @@ GPU load during the run: **78 W, 95% utilisation** (contrast: the CPU pipeline's
 25 W idle-ish card). For reference MotrixSim on the CPU does 79k env-steps/s at
 batch 32, so GPU physics is ~8.5x faster at 8192 worlds.
 
+## GPU catch environment (`catch_env_gpu.py`)
+
+Ported the catch environment onto mjwarp: batched worlds, the same observation
+layout / action space / reward / catch predicate / teacher as the MotrixSim env, and
+physics that are *modelled* rather than hacked - air drag from MuJoCo's fluid model
+(`<option density viscosity>`) and the bounce from contact restitution
+(`solref`), instead of the bridge-side velocity update and impulse.
+
+Two things needed fixing to get it running:
+
+* the 36 mecanum rollers exceed MuJoCo's default 64 constraints per world - the
+  limits are per-world arguments of `mjwarp.put_data` (not MJCF `<size>`):
+  `nconmax=256, njmax=1024, naconmax=256*nworld`;
+* `put_model` returns a *wrapped* model; `step` must receive that object.
+
+Measured: 512 worlds x 240 control steps in ~53 s (93k physics-steps/s), no
+overflow warnings. Raw physics throughput of the same model without the env layer
+is 0.67M env-steps/s at 8192 worlds, so the per-control-step numpy<->warp transfers
+are the current bottleneck.
+
+**Not calibrated yet**: MuJoCo's contact stiffness/damping gives a much deader ball
+than the reference - drop 2.54 m rebounds 0.13 m where the ITF-standard reference
+(and the MotrixSim model) gives 1.35 m, and the fluid model's drag is unverified
+against the measured serve flight. Until `solref`/`density`/`viscosity` are fitted
+to those two measurements the scripted teacher cannot score there (2/512), which in
+turn means demo collection on the GPU is not yet usable.
+
 ## (Historical) the nightly-index detour
 
 GPU physics needs `mujoco_warp.put_model`, which fails on a missing C struct field
