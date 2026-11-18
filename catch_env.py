@@ -390,6 +390,7 @@ class CatchEnv:
         self.done[:] = False
         self.traj[:] = 0.0
         self.age[:] = 0
+        self.traj[:, 0] = spawns          # same first trajectory point reset() writes
         for e in range(self.n):                 # analytic target: computable from the
             xy, t_c = first_catchable(spawns[e], v0s[e])   # trajectory the policy sees
             self.catch_xy[e] = xy if xy is not None else spawns[e, :2]
