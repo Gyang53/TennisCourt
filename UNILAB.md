@@ -59,6 +59,32 @@ from `_enums`). So **mjwarp main runs ahead of mujoco main** and the two cannot 
 paired from HEAD; a full source build needs the exact MuJoCo commit mjwarp's CI
 pins.
 
+### The exact pairing (found) and the network wall
+
+`mujoco_warp`'s own `uv.lock` pins `mujoco-core==4.0.2.dev<build>` from
+**`https://py.mujoco.org/`** - their nightly index, built from MuJoCo `main` the
+same day. That is the only source of a matched pair; PyPI's `mujoco-core` stops at
+4.0.1. Exact artifacts (build `4.0.2.dev1024142490`):
+
+```
+https://py.mujoco.org/mujoco-core/mujoco_core-4.0.2.dev1024142490-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl   (9.76 MB)
+https://py.mujoco.org/mujoco/mujoco-4.0.2.dev1024142490-py3-none-any.whl                                                       (2 MB)
+```
+
+Install them with `--no-deps` (the shell hard-depends on `mujoco-studio==<same
+dev version>`, which the nightly index does not serve):
+
+```bash
+uv pip install --python /home/yangg/data/miniforge3/envs/ms/bin/python --no-deps <core.whl> <shell.whl>
+```
+
+`mujoco_warp` 4.0.1 is already built from source in `ms`, so after those two wheels
+the GPU path should light up. **It is blocked only by download speed on this
+machine**: py.mujoco.org delivers ~2 KB/s here (0 B/s for long stretches) while
+PyPI gives ~25 KB/s, so the 9.76 MB wheel does not complete. A resumable downloader
+is running in `/tmp/mjnightly/` (state file `state` appears when finished); fetch
+the two URLs on a faster link and the install is one command.
+
 Two ways forward, both outside pip-only setup:
 
 1. **Docker**: use UniLab's `Dockerfile`, which pins the source-built
