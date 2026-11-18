@@ -23,9 +23,13 @@ import torch
 from torch import nn
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from ball_physics import VMAX_FORE, VMAX_LAT, WMAX
 from catch_env import CatchEnv
 
 OBS, ACT = 12, 3
+# CatchEnv.step takes the raw vehicle command in m/s and rad/s; the policy emits
+# the normalised +/-1 action the MotrixLab env expects, so scale here
+ACTION_SCALE = np.array([VMAX_FORE, VMAX_LAT, WMAX], dtype=np.float32)
 NORMALIZER_EPS, NORMALIZER_CLIP = 1e-8, 5.0
 
 
@@ -77,7 +81,7 @@ def run(policy, num_envs: int, radius: float, speed, rounds: int) -> float:
     for _ in range(rounds):
         obs = env.obs()
         for _ in range(240):
-            obs, _, done, info = env.step(policy(obs))
+            obs, _, done, info = env.step(policy(obs) * ACTION_SCALE)
             if done.any():
                 caught += int(info["caught"][done].sum())
                 episodes_done += int(done.sum())
