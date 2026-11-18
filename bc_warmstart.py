@@ -30,6 +30,7 @@ from bc_train import VMAX_NP, collect_batched
 from catch_env import CatchEnv
 
 OBS_DIM, ACT_DIM, WIDTH = 12, 3, 128
+NORMALIZER_EPS = 1e-8
 
 
 def build_net() -> nn.Sequential:
@@ -63,7 +64,7 @@ def train_bc(obs: np.ndarray, act: np.ndarray, epochs: int, batch: int, device: 
     return net.eval()
 
 
-def bc_catch_rate(net, num_envs: int) -> float:
+def bc_catch_rate(net, num_envs: int, mean, std) -> float:
     """Teacher-free check: does the distilled policy catch in the reference sim?"""
     device = next(net.parameters()).device
     env = CatchEnv(num_envs=num_envs, seed=11, serve_speed=(16.0, 20.0), radius=(1.5, 1.0), obs_mode="state")
@@ -71,8 +72,9 @@ def bc_catch_rate(net, num_envs: int) -> float:
     for _ in range(8):
         obs = env.obs()
         for _ in range(240):
+            scaled = torch.clamp((torch.from_numpy(obs) - torch.from_numpy(mean)) / torch.from_numpy(std), -5.0, 5.0)
             with torch.inference_mode():
-                action = net(torch.from_numpy(obs).to(device)).cpu().numpy().clip(-1.0, 1.0)
+                action = net(scaled.to(device)).cpu().numpy().clip(-1.0, 1.0)
             obs, _, done, info = env.step(action * VMAX_NP)
             if done.any():
                 caught += int(info["caught"][done].sum())
@@ -81,7 +83,7 @@ def bc_catch_rate(net, num_envs: int) -> float:
     return caught / max(done_total, 1)
 
 
-def export(net, obs: np.ndarray, template: pathlib.Path, out: pathlib.Path) -> None:
+def export(net, mean: np.ndarray, std: np.ndarray, count: int, template: pathlib.Path, out: pathlib.Path) -> None:
     """Write the BC weights into a copy of an SKRL checkpoint."""
     ck = torch.load(str(template), map_location="cpu", weights_only=False)
     state = ck["policy"]
@@ -94,9 +96,9 @@ def export(net, obs: np.ndarray, template: pathlib.Path, out: pathlib.Path) -> N
     # the normalizer must match the data the policy was fitted on: fresh training
     # runs start from the checkpoint's old statistics otherwise
     normalizer = ck["observation_preprocessor"]
-    normalizer["running_mean"] = torch.tensor(obs.mean(0), dtype=torch.float64)
-    normalizer["running_variance"] = torch.tensor(obs.var(0), dtype=torch.float64)
-    normalizer["current_count"] = torch.tensor(len(obs), dtype=torch.float64)
+    normalizer["running_mean"] = torch.tensor(mean, dtype=torch.float64)
+    normalizer["running_variance"] = torch.tensor(std ** 2 - NORMALIZER_EPS, dtype=torch.float64)
+    normalizer["current_count"] = torch.tensor(float(count), dtype=torch.float64)
     out.parent.mkdir(parents=True, exist_ok=True)
     torch.save(ck, str(out))
     print(f"wrote {out} (template {template.name}, policy + normalizer replaced)")
@@ -110,27 +112,39 @@ def main() -> None:
     parser.add_argument("--envs", type=int, default=256)
     parser.add_argument("--epochs", type=int, default=400)
     parser.add_argument("--batch", type=int, default=1024)
+    parser.add_argument("--cache", default="/tmp/tennis_bc_dataset.npz", help="demonstration cache")
     args = parser.parse_args()
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    rng = np.random.default_rng(0)
-    env = CatchEnv(num_envs=args.envs, seed=0, serve_speed=(16.0, 20.0), radius=(1.5, 1.0), obs_mode="state")
-    obs_buf, act_buf = [], []
-    batches = max(1, args.serves // args.envs)
-    for i in range(batches):
-        serves = [sample_serve(rng, (16.0, 20.0), (0.6, 1.0), (-4.9, 0.0), (1.5, 1.0)) for _ in range(args.envs)]
-        obs, act = collect_batched(env, serves, steps=240)
-        obs_buf.append(obs)
-        act_buf.append(act)
-    env.close()
-    obs = np.concatenate(obs_buf).astype(np.float32)
-    act = np.concatenate(act_buf).astype(np.float32)
+    cache = pathlib.Path(args.cache)
+    if cache.exists():
+        data = np.load(cache)
+        obs, act = data["obs"], data["act"]
+    else:
+        rng = np.random.default_rng(0)
+        env = CatchEnv(num_envs=args.envs, seed=0, serve_speed=(16.0, 20.0), radius=(1.5, 1.0), obs_mode="state")
+        obs_buf, act_buf = [], []
+        for _ in range(max(1, args.serves // args.envs)):
+            serves = [sample_serve(rng, (16.0, 20.0), (0.6, 1.0), (-4.9, 0.0), (1.5, 1.0)) for _ in range(args.envs)]
+            obs, act = collect_batched(env, serves, steps=240)
+            obs_buf.append(obs)
+            act_buf.append(act)
+        env.close()
+        obs = np.concatenate(obs_buf).astype(np.float32)
+        act = np.concatenate(act_buf).astype(np.float32)
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        np.savez(cache, obs=obs, act=act)
     print(f"dataset: {obs.shape[0]} transitions, obs {obs.shape[1:]} act {act.shape[1:]}")
 
-    net = train_bc(obs, act, args.epochs, args.batch, device)
-    rate = bc_catch_rate(net, num_envs=128)
+    # SKRL normalises observations with its running standard scaler, so the
+    # distilled policy must be fitted on that same transform; feeding it raw
+    # observations is what collapsed the first fine-tune within 100 steps.
+    mean = obs.mean(0)
+    std = np.sqrt(obs.var(0) + NORMALIZER_EPS)
+    net = train_bc((obs - mean) / std, act, args.epochs, args.batch, device)
+    rate = bc_catch_rate(net, num_envs=128, mean=mean, std=std)
     print(f"BC policy catch rate in the reference sim: {rate:.0%}")
-    export(net, obs, args.template, args.out)
+    export(net, mean, std, len(obs), args.template, args.out)
 
 
 if __name__ == "__main__":
