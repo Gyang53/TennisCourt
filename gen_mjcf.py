@@ -49,6 +49,9 @@ ROLLER_MASS = 0.1        # per roller
 WHEEL_HUB_MASS = 0.3     # hub, so hub + 9 rollers = 1.2 kg per wheel
 BALL_R = 0.0335          # tennis ball
 BALL_MASS = 0.057
+WHEEL_KV = 2.0           # velocity servo gain [N m / (rad/s)]
+WHEEL_CTRL_MAX = 60.0    # rad/s
+TORQUE_LIMIT = 12.0      # N m, the actuator force range
 COURT_HALF = (11.885, 5.485)   # 23.77 x 10.97 m
 NET_X = 2 * COURT_HALF[0]      # net line, 11.885 m from the robot's baseline
 NET_HALF_Y = 6.4
@@ -318,8 +321,11 @@ def main(out_path, court=None):
     a('  </worldbody>')
     a('  <actuator>')
     for p in ("FL", "FR", "RL", "RR"):
-        a(f'    <motor name="{p}_drive" joint="{p}_wheel_joint" gear="1"'
-          ' ctrlrange="-12 12" forcerange="-12 12"/>')
+        # velocity servo: the wheel speed is the command, so the drive does not
+        # depend on how an engine turns contact friction into torque
+        a(f'    <velocity name="{p}_drive" joint="{p}_wheel_joint" kv="{WHEEL_KV:g}"'
+          f' ctrlrange="-{WHEEL_CTRL_MAX:g} {WHEEL_CTRL_MAX:g}"'
+          f' forcerange="-{TORQUE_LIMIT:g} {TORQUE_LIMIT:g}"/>')
     a('  </actuator>')
     a('  <sensor>')
     for p in ("FL", "FR", "RL", "RR"):

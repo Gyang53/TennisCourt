@@ -439,10 +439,10 @@
     </body>
   </worldbody>
   <actuator>
-    <motor name="FL_drive" joint="FL_wheel_joint" gear="1" ctrlrange="-12 12" forcerange="-12 12"/>
-    <motor name="FR_drive" joint="FR_wheel_joint" gear="1" ctrlrange="-12 12" forcerange="-12 12"/>
-    <motor name="RL_drive" joint="RL_wheel_joint" gear="1" ctrlrange="-12 12" forcerange="-12 12"/>
-    <motor name="RR_drive" joint="RR_wheel_joint" gear="1" ctrlrange="-12 12" forcerange="-12 12"/>
+    <velocity name="FL_drive" joint="FL_wheel_joint" kv="2" ctrlrange="-60 60" forcerange="-12 12"/>
+    <velocity name="FR_drive" joint="FR_wheel_joint" kv="2" ctrlrange="-60 60" forcerange="-12 12"/>
+    <velocity name="RL_drive" joint="RL_wheel_joint" kv="2" ctrlrange="-60 60" forcerange="-12 12"/>
+    <velocity name="RR_drive" joint="RR_wheel_joint" kv="2" ctrlrange="-60 60" forcerange="-12 12"/>
   </actuator>
   <sensor>
     <jointvel joint="FL_wheel_joint" name="FL_wheel_vel"/>

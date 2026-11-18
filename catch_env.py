@@ -21,7 +21,7 @@ import motrixsim
 import numpy as np
 from ball_physics import (  # noqa: F401  (sample_serve/clears_net/first_catchable live here)
     BALL_R, COURT_X, DRAG_K, G_FORE, G_LAT, G_YAW, SERVICE_X, SINGLES_Y,
-    TANGENT_LOSS, TORQUE_LIMIT, WHEEL_KP, bounce_cor, catch_window, clears_net,
+    TANGENT_LOSS, TORQUE_LIMIT, WHEEL_CTRL_MAX, WHEEL_KP, bounce_cor, catch_window, clears_net,
     first_catchable, flight, fly_step, sample_serve,
 )
 
@@ -232,9 +232,9 @@ class CatchEnv:
         if self._wheel_ref is None:
             self._wheel_ref = np.zeros_like(targets)
         self._wheel_ref += np.clip(targets - self._wheel_ref, -WHEEL_SLEW, WHEEL_SLEW)
-        w = self.data.dof_vel[:, self.wheel_v]
-        self.data.actuator_ctrls = np.clip(WHEEL_KP * (self._wheel_ref - w),
-                                           -TORQUE_LIMIT, TORQUE_LIMIT).astype(np.float32)
+        # the actuators are velocity servos: the command is the wheel speed
+        self.data.actuator_ctrls = np.clip(self._wheel_ref, -WHEEL_CTRL_MAX,
+                                           WHEEL_CTRL_MAX).astype(np.float32)
 
     # ------------------------------------------------------------ intercept
     def _predict(self, z_target=0.30, dt=0.005, horizon=3.0):

@@ -43,7 +43,9 @@ G_FORE = 0.09958          # base_link x [m/s] per rad/s
 G_LAT = 0.09712           # base_link y [m/s] per rad/s
 G_YAW = 0.18613           # base_link z [rad/s] per rad/s
 VMAX_FORE, VMAX_LAT, WMAX = 4.0, 4.5, 3.0
-WHEEL_KP, TORQUE_LIMIT = 10.0, 12.0
+WHEEL_KP, TORQUE_LIMIT = 10.0, 12.0      # legacy torque servo (policies/BC data)
+WHEEL_KV = 2.0                            # velocity servo gain [N m / (rad/s)]
+WHEEL_CTRL_MAX = 60.0                     # rad/s command limit
 BODY_KP, YAW_KP = 0.30, 0.30
 
 

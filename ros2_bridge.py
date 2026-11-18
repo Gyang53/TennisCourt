@@ -59,7 +59,7 @@ from tf2_msgs.msg import TFMessage
 
 XML = "rally_court.xml"
 from ball_physics import (  # noqa: F401
-    BODY_KP, G_FORE, G_LAT, G_YAW, TORQUE_LIMIT, VMAX_FORE, VMAX_LAT, WHEEL_KP,
+    BODY_KP, G_FORE, G_LAT, G_YAW, TORQUE_LIMIT, VMAX_FORE, VMAX_LAT, WHEEL_CTRL_MAX, WHEEL_KP,
     WHEELS, WMAX, YAW_KP,
 )
 
@@ -278,9 +278,9 @@ class Bridge:
 
     def control(self) -> None:
         if (self.t - self.wheel_time) <= DEADMAN:          # raw wheel targets win
-            wheel_w = np.array([float(np.ravel(j.get_dof_vel(self.d))[0]) for j in self.wheels])
-            ctrl = np.clip(WHEEL_KP * (self.wheel_cmd - wheel_w), -TORQUE_LIMIT, TORQUE_LIMIT)
-            self.d.actuator_ctrls = ctrl.astype(np.float32)
+            # velocity servos: the command is the wheel speed
+            self.d.actuator_ctrls = np.clip(self.wheel_cmd, -WHEEL_CTRL_MAX,
+                                            WHEEL_CTRL_MAX).astype(np.float32)
             return
         alive = (self.t - self.cmd_time) <= DEADMAN
         fwd, left, yaw = self.cmd if alive else (0.0, 0.0, 0.0)
@@ -300,9 +300,7 @@ class Bridge:
                            common - lat - yaw_c,
                            common - lat + yaw_c,
                            common + lat - yaw_c])
-        wheel_w = np.array([float(np.ravel(j.get_dof_vel(self.d))[0]) for j in self.wheels])
-        ctrl = np.clip(WHEEL_KP * (speeds - wheel_w), -TORQUE_LIMIT, TORQUE_LIMIT)
-        self.d.actuator_ctrls = ctrl.astype(np.float32)
+        self.d.actuator_ctrls = np.clip(speeds, -WHEEL_CTRL_MAX, WHEEL_CTRL_MAX).astype(np.float32)
 
     # -------------------------------------------------------------- publishers
     def publish(self) -> None:
