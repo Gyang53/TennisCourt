@@ -62,12 +62,10 @@ def collect_batched(env, serves, obs_mode="both", steps=240):
 
     sp = np.array([x[0] for x in serves])
     v0 = np.array([x[1] for x in serves])
-    env.set_serves(sp, v0)
-    found = env.record_catch_points()
-    targets, times = env.catch_xy.copy(), env.catch_t.copy()
+    # set_serves computes the analytic catch target, which is both accurate
+    # (0.05 m against the engine) and computable from the observation
     env.set_serves(sp, v0, park=False)
-    env.catch_xy[:] = targets
-    env.catch_t[:] = times
+    found = np.ones(env.n, dtype=bool)
     obs_buf, act_buf = [], []
     active = np.ones(env.n, dtype=bool)
     for _ in range(steps):

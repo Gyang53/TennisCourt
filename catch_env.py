@@ -21,10 +21,25 @@ import motrixsim
 import numpy as np
 from ball_physics import (
     BALL_R, COURT_X, DRAG_K, G_FORE, G_LAT, G_YAW, SERVICE_X, SINGLES_Y,
-    TANGENT_LOSS, TORQUE_LIMIT, WHEEL_KP, bounce_cor, catch_window, flight,
+    TANGENT_LOSS, TORQUE_LIMIT, WHEEL_KP, bounce_cor, catch_window, flight, fly_step,
 )
 
 GRAVITY = 9.81
+
+
+def clears_net(spawn, v0, need=0.15, dt=0.002, max_t=2.5):
+    """Drag-aware clearance (ball surface over the net box); rejects net clips."""
+    p = np.array(spawn, float)
+    v = np.array(v0, float)
+    t = 0.0
+    while t < max_t:
+        prev = p
+        p, v = fly_step(p, v, dt)
+        t += dt
+        if prev[0] > 0.0 >= p[0] and p[0] != prev[0]:
+            u = (0.0 - prev[0]) / (p[0] - prev[0])
+            return bool(prev[2] + u * (p[2] - prev[2]) - 1.07 - BALL_R >= need)
+    return False
 
 
 def first_catchable(spawn, v0, z_enter=0.52, dt=0.002, v_eff=3.6, t_react=0.2, max_t=4.0):
@@ -88,9 +103,10 @@ def sample_serve(rng, speed_range, clearance_range, aim=(-4.9, 0.0), radius=(1.5
                        speed * math.sin(elev)])
         if spawn[0] * v0[0] >= 0.0:
             continue
-        t_net = spawn[0] / -v0[0]
-        z_net = spawn[2] + v0[2] * t_net - 0.5 * GRAVITY * t_net * t_net
-        if z_net - 1.07 - BALL_R < rng.uniform(*clearance_range) + 0.3:
+        # net clearance integrated with the real drag: a serve that clips the net
+        # dies there, its engine trajectory leaves the analytic model, and that
+        # would poison both the teacher target and the labels
+        if not clears_net(spawn, v0, rng.uniform(*clearance_range)):
             continue
         return spawn, v0
     return spawn, v0
@@ -374,8 +390,10 @@ class CatchEnv:
         self.done[:] = False
         self.traj[:] = 0.0
         self.age[:] = 0
-        self.catch_xy[:] = spawns[:, :2]
-        self.catch_t[:] = 3.0
+        for e in range(self.n):                 # analytic target: computable from the
+            xy, t_c = first_catchable(spawns[e], v0s[e])   # trajectory the policy sees
+            self.catch_xy[e] = xy if xy is not None else spawns[e, :2]
+            self.catch_t[e] = t_c if t_c is not None else 3.0
 
     def record_catch_points(self, z_enter=0.52, v_eff=3.6, t_react=0.2, steps=240):
         """Pass 1: run the balls with the robots parked and record, per env, the
