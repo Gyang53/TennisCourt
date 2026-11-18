@@ -423,7 +423,7 @@ class CatchEnv:
                 break
         return found
 
-    def teacher_action(self, lead=0.6, kv=0.8, kp_far=6.0, kp_near=9.0):
+    def teacher_action(self, lead=0.6, kv=0.0, kp_far=1.5, kp_near=2.5):
         """Scripted teacher: drive to the recorded catch point, timed, with an
         inner velocity loop (pure position feedback leaves a mecanum strafe
         error of ~0.24 m at the arrival).  Returns normalised actions."""

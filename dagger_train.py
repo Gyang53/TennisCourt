@@ -43,12 +43,10 @@ def rollout(env, net, serves, noise=0.15, steps=240):
     """Student acts, teacher labels. Returns (obs, teacher action) pairs."""
     sp = np.array([x[0] for x in serves])
     v0 = np.array([x[1] for x in serves])
-    env.set_serves(sp, v0)
-    env.record_catch_points()
-    targets, times = env.catch_xy.copy(), env.catch_t.copy()
+    # the analytic target computed by set_serves is both accurate (0.05 m against
+    # the engine) and computable from the observation, so the teacher's labels are
+    # a function of the student's input - without that DAgger regresses on noise
     env.set_serves(sp, v0, park=False)
-    env.catch_xy[:] = targets
-    env.catch_t[:] = times
     obs_buf, act_buf = [], []
     active = np.ones(env.n, dtype=bool)
     for _ in range(steps):
