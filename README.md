@@ -211,12 +211,23 @@ Run on the whole batch it is fast: `CatchEnv.set_serves` + `record_catch_points`
 (park the robots, record each ball's first reachable entry) then a replay pass
 with `teacher_action`. 24 serves in ~3 s.
 
-Distilling it with behaviour cloning does **not** work yet: the cloned policy
-catches 0% while its teacher catches 33-92% (BC fit MSE 0.0127 on normalised
-actions, i.e. ~0.5 m/s of action error - far too much for a +-0.2 m window). The
-teacher's actions are aggressive (kp 9 plus the velocity loop) and the demo set is
-small (320 serves). Next: smoother teacher gains, 3-5x the demos, and DAgger
-(query the teacher at the states the policy actually visits) instead of plain BC.
+Distilling it does **not** work, and the reason is structural rather than a
+tuning problem: the teacher's label depends on the *recorded engine-truth* catch
+point, which is not a function of anything the policy can observe (the trajectory
+it sees is produced by the same physics, but the target is the outcome of the
+engine's soft-contact bounce). Supervising on it is therefore regression on noise
+- BC fit MSE 0.0127 and DAgger 0.44, i.e. close to the label variance - and both
+clones catch 0%.
+
+Two ways out, both explicit trade-offs:
+
+1. **self-consistent teacher**: label with the *analytic* target
+   (`first_catchable`, computable from the trajectory the policy sees). That teacher
+   catches ~31% (its analytic bounce model is 0.1-0.2 m from the engine), and a
+   clone can fit it - a ~30% policy that is deployable;
+2. **privileged information**: train with the recorded target (or the full future
+   trajectory) as an input. Higher ceiling, but the policy then needs that input at
+   deployment, i.e. a predictor good enough to supply it.
 
 The policy to use is still `policies/catch_bc.pt` (59/34/0%).
 
