@@ -119,8 +119,11 @@ CAGE_HALF = 0.21                # cage footprint half width
 CAGE_LOW, CAGE_HIGH = -0.06, 0.36   # base-frame z window of a catch
 CATCH_Z = 0.30                      # world height where the approach is scored
 VMAX_FORE, VMAX_LAT, WMAX = 4.0, 4.5, 3.0
-ACCEL_LIMIT = 20.0               # m/s^2 ramp on the commanded body velocity
-SOFT_START = 0.4                 # s: the ramp only applies at the start of an episode
+# spec limits of the drive (measured in test_motion.py):
+#   body X (wheel axis)  accel 3.5, decel 5.0, vmax 4.0
+#   body Y (lateral)     accel 2.5, decel 5.0, vmax 4.5
+ACCEL_FORE, DECEL_FORE = 3.5, 5.0
+ACCEL_LAT, DECEL_LAT = 2.5, 5.0
 WHEEL_SLEW = 10.0                # rad/s per control step on the wheel speed target
 TRAJ_POINTS = 16                 # trajectory samples fed to the policy
 OBS_MODES = {                     # what the policy sees
@@ -283,13 +286,21 @@ class CatchEnv:
         target = np.stack([fwd, left], axis=1)
         if self._v_cmd is None:
             self._v_cmd = np.zeros_like(target)
-        # soft start: full-lateral commands from rest make the mecanum rollers slip
-        # and pitch the chassis up ~30 mm.  20 m/s^2 for the first 0.5 s removes the
-        # visible hop while reaching full speed in ~0.22 s.
-        soft = (self.t < SOFT_START)[:, None]
-        step = ACCEL_LIMIT * (self.substeps * self.dt)
-        delta = np.clip(target - self._v_cmd, -step, step)
-        self._v_cmd = np.where(soft, self._v_cmd + delta, target)
+        # accelerate along the drive spec instead of jumping to the commanded
+        # speed: asking for 4.5 m/s laterally from rest makes the mecanum rollers
+        # slip and pitches the chassis up 30 mm (the "hop" at startup).  Ramping at
+        # the spec rates keeps the wheels from breaking traction at all.
+        if self._v_cmd is None:
+            self._v_cmd = np.zeros_like(target)
+        dt_c = self.substeps * self.dt
+        prev = self._v_cmd
+        for axis, (a_acc, a_dec) in enumerate(((ACCEL_FORE, DECEL_FORE),
+                                               (ACCEL_LAT, DECEL_LAT))):
+            tgt = target[:, axis]
+            speeding_up = (np.abs(tgt) > np.abs(prev[:, axis])) & \
+                          ((prev[:, axis] == 0.0) | (np.sign(tgt) == np.sign(prev[:, axis])))
+            rate = np.where(speeding_up, a_acc, a_dec) * dt_c
+            prev[:, axis] += np.clip(tgt - prev[:, axis], -rate, rate)
         fwd = self._v_cmd[:, 0]
         left = self._v_cmd[:, 1]
         # vehicle (forward, left) -> base_link (left, -forward)
