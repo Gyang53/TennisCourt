@@ -21,7 +21,7 @@ import motrixsim
 import numpy as np
 from ball_physics import (
     BALL_R, COURT_X, DRAG_K, G_FORE, G_LAT, G_YAW, SERVICE_X, SINGLES_Y,
-    TANGENT_LOSS, TORQUE_LIMIT, WHEEL_KP, bounce_cor, flight,
+    TANGENT_LOSS, TORQUE_LIMIT, WHEEL_KP, bounce_cor, catch_window, flight,
 )
 
 GRAVITY = 9.81
@@ -116,6 +116,8 @@ class CatchEnv:
         self.done = np.ones(self.n, dtype=bool)
         self.caught = np.zeros(self.n)
         self.prev_bz = np.zeros(self.n)
+        self.catch_xy = np.zeros((self.n, 2))    # oracle catch point (teacher target)
+        self.catch_t = np.zeros(self.n)
         self.traj = np.zeros((self.n, 400, 3), np.float32)   # ball path since the serve
         self.age = np.zeros(self.n, dtype=int)
         self._pred = None
@@ -164,6 +166,9 @@ class CatchEnv:
             pos[e, self.ball_p[:3]] = spawn
             pos[e, self.ball_p[3:]] = (1.0, 0.0, 0.0, 0.0)
             vel[e, self.ball_v] = np.concatenate([v0, (0.0, 0.0, 0.0)])
+            xy, t_c = catch_window(spawn, v0)
+            self.catch_xy[e] = xy if xy is not None else spawn[:2]
+            self.catch_t[e] = t_c if t_c is not None else 3.0
         self.data.set_dof_pos(pos, self.model)
         self.data.set_dof_vel(vel)
         self.data.actuator_ctrls = np.zeros((self.n, 4), np.float32)

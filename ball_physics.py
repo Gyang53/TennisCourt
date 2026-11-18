@@ -80,6 +80,31 @@ def _launch(speed, azimuth, elevation):
                      speed * math.sin(elevation)])
 
 
+def catch_window(spawn, v0, z_target=0.30, dt=0.002, max_t=4.0):
+    """Where and when the ball first descends through z_target after its first
+    bounce - the point the robot has to be under.  Used as the teacher's oracle."""
+    p = np.array(spawn, float)
+    v = np.array(v0, float)
+    bounced = False
+    prev_z = float(p[2])
+    t = 0.0
+    while t < max_t:
+        p, v = fly_step(p, v, dt)
+        t += dt
+        low = p[2] <= BALL_R
+        if low:
+            vn = -v[2]
+            v[2] = vn * bounce_cor(vn)
+            v[0] *= TANGENT_LOSS
+            v[1] *= TANGENT_LOSS
+            p[2] = BALL_R
+            bounced = True
+        if bounced and prev_z > z_target >= p[2] and v[2] < 0.0:
+            return np.array([p[0], p[1]]), t
+        prev_z = float(p[2])
+    return None, None
+
+
 def clearance_at(spawn, speed, elevation_deg, azimuth=0.0, dt=0.001):
     """(landing xy, net clearance) of a serve launched at that elevation/azimuth."""
     return flight(spawn, _launch(speed, azimuth, math.radians(elevation_deg)), dt=dt)
