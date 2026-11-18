@@ -55,6 +55,34 @@ def teacher_action_for(env, tx, ty, tc, lead=0.6, kv=0.8):
     return np.clip(raw / VMAX_NP, -1.0, 1.0)
 
 
+def collect_batched(env, serves, obs_mode="both", steps=240):
+    """Two batched passes: record each ball's first reachable entry into the cage
+    window, then replay the same serves with the teacher while recording demos."""
+    from catch_env import sample_serve  # noqa: F401  (kept for callers)
+
+    sp = np.array([x[0] for x in serves])
+    v0 = np.array([x[1] for x in serves])
+    env.set_serves(sp, v0)
+    found = env.record_catch_points()
+    targets, times = env.catch_xy.copy(), env.catch_t.copy()
+    env.set_serves(sp, v0, park=False)
+    env.catch_xy[:] = targets
+    env.catch_t[:] = times
+    obs_buf, act_buf = [], []
+    active = np.ones(env.n, dtype=bool)
+    for _ in range(steps):
+        if not active.any():
+            break
+        a = env.teacher_action()
+        obs = env.obs()
+        obs_buf.append(obs[active].copy())
+        act_buf.append(a[active].astype(np.float32))
+        obs, _r, done, _i = env.step(a * VMAX_NP)
+        active &= ~done
+    print(f"collected {sum(len(x) for x in obs_buf)} transitions from {int(found.sum())} recorded serves", flush=True)
+    return np.concatenate(obs_buf), np.concatenate(act_buf)
+
+
 def collect_oracle(episodes, seed0, sp, cl, radius, obs_mode="both"):
     """Two-pass demos: record the first reachable catch point in a parked pass,
     then replay the same serve with the teacher and record (obs, action)."""
@@ -89,7 +117,7 @@ def collect(env, episodes, phases=(0, 1, 2, 3, 4)):
         apply_phase(env, phases[min(phase, len(phases) - 1)])
         obs = env.obs()
         for _ in range(240):
-            a = teacher_action(env)
+            a = env.teacher_action()
             obs_buf.append(obs)
             act_buf.append(a.astype(np.float32))
             obs, _rew, done, _info = env.step(a * VMAX_NP)
@@ -107,14 +135,30 @@ def main():
     ap.add_argument("--epochs", type=int, default=40)
     ap.add_argument("--batch", type=int, default=512)
     ap.add_argument("--lr", type=float, default=3e-4)
+    ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--hidden", type=int, default=128)
     ap.add_argument("--oracle", action="store_true", help="two-pass oracle demos")
+    ap.add_argument("--batched", action="store_true", help="batched two-pass demos")
+    ap.add_argument("--rounds", type=int, default=6, help="serve sets to collect")
     ap.add_argument("--speed", type=float, nargs=2, default=(12.0, 16.0))
     ap.add_argument("--radius", type=float, default=1.5)
     ap.add_argument("--out", default="policies/catch_bc.pt")
     args = ap.parse_args()
 
-    if args.oracle:
+    if args.batched:
+        from catch_env import sample_serve
+        rng = np.random.default_rng(args.seed)
+        env = CatchEnv(num_envs=args.envs, seed=args.seed, serve_speed=args.speed,
+                       serve_clearance=(0.6, 1.0), radius=(args.radius, args.radius))
+        O, A = [], []
+        for _ in range(args.rounds):
+            serves = [sample_serve(rng, args.speed, (0.6, 1.0), (-4.9, 0.0),
+                                   (args.radius, args.radius)) for _ in range(env.n)]
+            o, a = collect_batched(env, serves)
+            O.append(o)
+            A.append(a)
+        obs, act = np.concatenate(O), np.concatenate(A)
+    elif args.oracle:
         obs, act = collect_oracle(args.episodes, 600, args.speed, (0.6, 1.0), args.radius)
     else:
         env = CatchEnv(num_envs=args.envs, seed=1)

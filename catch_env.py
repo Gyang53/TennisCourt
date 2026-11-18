@@ -27,6 +27,33 @@ from ball_physics import (
 GRAVITY = 9.81
 
 
+def first_catchable(spawn, v0, z_enter=0.52, dt=0.002, v_eff=3.6, t_react=0.2, max_t=4.0):
+    """First moment the ball is inside the cage window (z <= z_enter) at a point
+    the robot can reach from START - the teacher's target.
+
+    Any bounce counts.  Computed from the serve state, so it is a prediction; it
+    only has to be good enough for the teacher to arrive (the policy re-plans).
+    """
+    py, vy_ = np.array(spawn, float), np.array(v0, float)
+    t = 0.0
+    while t < max_t:
+        speed = float(np.linalg.norm(vy_))
+        vy_ = vy_ + (-DRAG_K * speed * vy_ + np.array([0.0, 0.0, -9.81])) * dt
+        py = py + vy_ * dt
+        t += dt
+        if py[2] <= BALL_R:
+            vn = -vy_[2]
+            vy_[2] = vn * bounce_cor(vn)
+            vy_[0] *= TANGENT_LOSS
+            vy_[1] *= TANGENT_LOSS
+            py[2] = BALL_R
+        if py[2] <= z_enter:
+            d = float(np.hypot(py[0] - START[0], py[1] - START[1]))
+            if d <= v_eff * max(t - t_react, 0.0):
+                return py[:2].copy(), t
+    return None, None
+
+
 def sample_serve(rng, speed_range, clearance_range, aim=(-4.9, 0.0), radius=(1.5, 1.0)):
     """Fast approximate serve for training resets.
 
@@ -163,6 +190,9 @@ class CatchEnv:
             # random legal serve
             spawn, v0 = sample_serve(self.rng, self.serve_speed, self.serve_clearance,
                                      self.aim, self.radius)
+            xy, t_c = first_catchable(spawn, v0)
+            self.catch_xy[e] = xy if xy is not None else spawn[:2]
+            self.catch_t[e] = t_c if t_c is not None else 3.0
             pos[e, self.ball_p[:3]] = spawn
             pos[e, self.ball_p[3:]] = (1.0, 0.0, 0.0, 0.0)
             vel[e, self.ball_v] = np.concatenate([v0, (0.0, 0.0, 0.0)])
@@ -322,6 +352,72 @@ class CatchEnv:
         p, _ = self.robot_pose()
         d = np.linalg.norm(self.ball_pose()[:, :2] - p[:, :2], axis=1)
         return -np.minimum(d, 12.0) / 12.0
+
+    def set_serves(self, spawns, v0s, park=True):
+        """Install explicit serves (spawn, v0 per env) and park the robots away,
+        so one batched pass can record where each ball enters the cage window."""
+        pos = self.data.dof_pos.copy()
+        vel = np.zeros_like(self.data.dof_vel)      # wheel spin from a previous pass must not carry over
+        for e in range(self.n):
+            rx, ry = (-2.0, -8.0) if park else START
+            pos[e, :7] = (rx, ry, 0.1555, 0.0, 0.0, math.sin(math.pi / 4), math.cos(math.pi / 4))
+            vel[e, :6] = 0.0
+            pos[e, self.ball_p[:3]] = spawns[e]
+            pos[e, self.ball_p[3:]] = (1.0, 0.0, 0.0, 0.0)
+            vel[e, self.ball_v] = np.concatenate([v0s[e], (0.0, 0.0, 0.0)])
+        self.data.set_dof_pos(pos, self.model)
+        self.data.set_dof_vel(vel)
+        self.data.actuator_ctrls = np.zeros((self.n, 4), np.float32)
+        self.model.forward_kinematic(self.data)
+        self.t[:] = 0.0
+        self.caught[:] = 0.0
+        self.done[:] = False
+        self.traj[:] = 0.0
+        self.age[:] = 0
+        self.catch_xy[:] = spawns[:, :2]
+        self.catch_t[:] = 3.0
+
+    def record_catch_points(self, z_enter=0.52, v_eff=3.6, t_react=0.2, steps=240):
+        """Pass 1: run the balls with the robots parked and record, per env, the
+        first entry into the cage window that the robot could reach from START."""
+        found = np.zeros(self.n, dtype=bool)
+        for _ in range(steps):
+            # keep the robot out of the ball's way every step: a parked robot that
+            # the ball happens to hit would corrupt the record
+            pos = self.data.dof_pos.copy()
+            pos[:, 0] = -2.0
+            pos[:, 1] = -8.0
+            self.data.set_dof_pos(pos, self.model)
+            self.model.forward_kinematic(self.data)
+            obs, _rew, done, _info = self.step(np.zeros((self.n, 3)))
+            bp = self.ball_pose()
+            # reachability from START, using this env's serve time
+            d = np.linalg.norm(bp[:, :2] - np.array(START), axis=1)
+            ok = (bp[:, 2] <= z_enter) & ~found & (d <= v_eff * np.maximum(self.t - t_react, 1e-6))
+            if ok.any():
+                self.catch_xy[ok] = bp[ok, :2]
+                self.catch_t[ok] = self.t[ok]
+                found |= ok
+            if found.all() or done.all():
+                break
+        return found
+
+    def teacher_action(self, lead=0.6, kv=0.8, kp_far=6.0, kp_near=9.0):
+        """Scripted teacher: drive to the recorded catch point, timed, with an
+        inner velocity loop (pure position feedback leaves a mecanum strafe
+        error of ~0.24 m at the arrival).  Returns normalised actions."""
+        p, q = self.robot_pose()
+        yaw = self.yaw_of(q)
+        vw = self.model.get_link_velocities(self.data)[:, self.base_i, :2]
+        err = self.catch_xy - p[:, :2]
+        kp = np.where(self.t < self.catch_t - lead, kp_far, kp_near)
+        v_ref = np.clip(kp[:, None] * err, -4.0, 4.0)
+        v_cmd = np.clip(v_ref + kv * (v_ref - vw), -4.5, 4.5)
+        c, s = np.cos(yaw), np.sin(yaw)
+        fwd = v_cmd[:, 0] * s - v_cmd[:, 1] * c
+        left = v_cmd[:, 0] * c + v_cmd[:, 1] * s
+        raw = np.stack([fwd, left, np.zeros(self.n)], axis=1)
+        return raw / np.array([4.0, 4.5, 3.0])
 
     def _obs(self):
         p, q = self.robot_pose()
