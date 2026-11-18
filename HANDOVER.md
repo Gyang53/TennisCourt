@@ -60,6 +60,19 @@ mxlab train task=tennis_catch/skrl.ppo num_envs=512 logging.interval=10
 mxlab play env=tennis_catch policy=runs/.../checkpoints/best_agent.pt
 ```
 
+### GPU 物理后端（`sim=mujoco_warp`）
+
+MotrixSim 后端是 **CPU 物理**（512 世界 × 42 body 把 24 核吃满，GPU 只在跑 128×128 的 PPO 更新 ≈ 10%）。为把物理放到 GPU，我们给 MotrixLab 加了一个后端：
+
+| 文件 | 内容 |
+|---|---|
+| `.../tennis_catch/mjwarp_backend.py` | `MujocoWarpBackend`（`SimBackend` 子类，注册名 `mujoco_warp`）：`put_model/put_data(nworld, nconmax=256, njmax=1024, naconmax=256*nworld)`、`dof_pos/dof_vel` 零拷贝视图（`wp.to_torch`）、`CtrlTargetsWrite` 写入 → `wp.copy(d.ctrl)`、`step(n)` 循环 |
+| `.../tennis_catch/state_io.py` | 两个后端差异集中处：dof 索引（MotrixSim 的 `floating_bases` / MuJoCo 的 `jnt_qposadr`）与 reset 写状态（MotrixSim `set_dof_pos` / warp `qpos.assign` + `forward`）|
+
+用法：`mxlab train task=tennis_catch/skrl.ppo sim=mujoco_warp num_envs=4096`
+
+注意：为装 mjwarp 把 venv 的 `mujoco` 从 `3.9.0`（`motrix_env_mujoco` 的精确锁）升到 `4.0.1` —— 该包只服务 MuJoCo 部署/导出路径，本任务的训练与播放不走它。
+
 ### 接入时踩的坑（MotrixLab/MotrixSim 后端）
 
 1. `BodyPositionWrite` 等声明式写**只对第一个浮基生效**（我们的球是第二个浮基，写入静默无效）→ reset 必须走 `sim._data.set_dof_pos/set_dof_vel`（和 `ros2_bridge.py` 同一套 API）。
