@@ -281,13 +281,17 @@ instead of jumping to the commanded speed - that removed the startup hop
 
 | policy | 12-16 r0.5 | 12-16 r1.5 | 16-20 r3.0 |
 |---|---|---|---|
-| teacher (scripted) | 100% | 96% | 50% |
-| **`policies/catch_bc_spec.pt`** (drive-spec accelerations, 61-dim obs) | **81%** | **71%** | 42% |
-| `policies/catch_bc_A3.pt` (instant commands, hops at startup) | 62% | 52% | 50% |
-| `policies/catch_bc.pt` (12-dim state obs, shipped before) | 59% | 34% | 0% |
+| teacher (scripted, the demos' ceiling) | 100% | 96% | 50% |
+| **`policies/catch_bc_big.pt`** (800 serves, 100 epochs, GPU) | **92%** | **100%** | **54%** |
+| `catch_bc_spec.pt` (400 serves, 60 epochs) | 81% | 71% | 42% |
+| `catch_bc_A3.pt` (instant commands, hops at startup) | 62% | 52% | 50% |
+| `catch_bc.pt` (12-dim state obs, shipped before) | 59% | 34% | 0% |
 
-`catch_bc_spec.pt` is the policy to use: 81/71/42% with physically correct
-acceleration and no startup hop.
+`catch_bc_big.pt` is the policy to use: 92/100/54% with physically correct
+acceleration and no startup hop (live viewport check: 12/20 = 60% on the fastest
+distribution). Note it already matches or beats the scripted teacher at 16-20 m/s,
+so that number is the teacher's ceiling, not the policy's: pushing it further needs
+either a better teacher for fast serves or PPO fine-tuning on top of this policy.
 
 Training runs on the GPU when one is present (`--device cuda|cpu`, auto-detected;
 the RTX 5060 is used at capability 12.0). Note the honest split: the policy update

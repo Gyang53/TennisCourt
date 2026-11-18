@@ -27,7 +27,7 @@ VMAX_NP = np.asarray(VMAX, float)
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--policy", default="policies/catch_bc_spec.pt")
+    ap.add_argument("--policy", default="policies/catch_bc_big.pt")
     ap.add_argument("--episodes", type=int, default=0, help="0 = run forever")
     ap.add_argument("--speed", type=float, nargs=2, default=(16.0, 20.0))
     ap.add_argument("--clearance", type=float, nargs=2, default=(0.45, 0.8))
