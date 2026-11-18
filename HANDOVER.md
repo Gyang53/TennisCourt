@@ -101,6 +101,21 @@ MotrixSim 后端是 **CPU 物理**（512 世界 × 42 body 把 24 核吃满，GP
 
 裸 `motrixsim.step_n(d, 40)`，1024 世界：**5.2k env-steps/s = 0.21M physics substeps/s**（参考 venv 3.1k）。即这个模型（36 辊子 × 地面接触 + 252 geom）每个世界每个控制步约 0.2 ms。训练吞吐因此约 **5k env-steps/s，1M 步 ≈ 3.5 分钟**；10M 步 ≈ 35 分钟。
 
+### GPU 训练跑通（首个完整 run）
+
+| 项 | 值 |
+|---|---|
+| 命令 | `mxlab train task=tennis_catch/skrl.ppo sim=mujoco_warp num_envs=4096` |
+| 预算 | `trainer.timesteps=3000`（**控制步**）× 4096 世界 = 12.3M env 步 |
+| 耗时 | **31 分 54 秒**，1.6 控制步/s = 6.5k env-steps/s |
+| 硬件占用 | GPU 91%、75 W、3.8 GB；**CPU 0% user** |
+| 产出 | `runs/tennis_catch/skrl/torch/ppo/<ts>/checkpoints/{agent_N,best_agent,final}.pt` |
+
+跨引擎评测：`python eval_cross_engine.py --ckpt <run>/checkpoints/best_agent.pt --envs 512`
+（把 SKRL 前向按训练代码原样重建：ELU MLP → `mean_layer`，观测走 `RunningStandardScaler`，在 MotrixSim 参考环境里跑）
+
+注意：评测用小批量（48 世界）时只有 ~243 env-steps/s —— 固定开销主导，评测也用 512+ 世界。
+
 ## 下一步（按顺序）
 
 1. **GPU 诊断 27%**：在记录的真实穿越时刻量笼坐标系下的脱靶距离（CPU 侧同一套方法曾定位出"目标定义错误"和"横移滑移"）。若属跟踪问题，把辊子接触/摩擦参数按实测驱动规格（加速 3.5/2.5、减速 5.0、vmax 4.0/4.5）拟合。
