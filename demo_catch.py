@@ -253,7 +253,8 @@ def main():
     ap.add_argument("--radius", type=float, default=3.0)
     ap.add_argument("--speed", type=float, nargs=2, default=(16.0, 20.0))
     ap.add_argument("--clearance", type=float, nargs=2, default=(0.45, 0.8))
-    ap.add_argument("--render-seeds", type=int, nargs="*", default=[3, 7])
+    ap.add_argument("--render-seeds", type=int, nargs="*", default=[],
+                    help="frame indices to render; empty = no frames (use demo_live.py for the viewport)")
     args = ap.parse_args()
 
     net = load_policy(args.policy)

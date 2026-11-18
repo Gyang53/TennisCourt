@@ -147,10 +147,21 @@ with the same exact serve planner the ROS bridge uses.
 
 ### Demo
 
+Watch it live (opens the renderer, ~60 fps, serves back to back, prints each
+outcome):
+
 ```bash
-# 32 serves at 16-20 m/s over the full legal box: prints the catch rate,
-# writes rl_catch_paths.png (top-down ball/robot paths, catch points) and
-# rl_catch_N.png (rendered frames of a catching episode)
+.venv/bin/python demo_live.py                      # 16-20 m/s, full serve box
+.venv/bin/python demo_live.py --speed 12 16 --radius 1.5
+.venv/bin/python demo_live.py --episodes 10        # stop after 10 serves
+.venv/bin/python demo_live.py --wide               # fixed camera instead of chase cam
+```
+
+Headless statistics and a top-down path plot:
+
+```bash
+# 32 serves at 16-20 m/s over the full legal box: prints the catch rate and
+# writes rl_catch_paths.png (top-down ball/robot paths, catch points)
 .venv/bin/python demo_catch.py --episodes 32
 
 # other distributions / the earlier policy
@@ -161,10 +172,10 @@ with the same exact serve planner the ROS bridge uses.
 .venv/bin/python demo_catch.py --episodes 64 --render-seeds
 ```
 
-`--render-seeds -1` (the default in recent runs) searches for an episode that
-actually catches before rendering; `--render-seeds` with no values skips
-rendering. The policy's observation mode is picked from the checkpoint, so both
-`catch_bc.pt` (12-dim) and `catch_bc_A3.pt` (61-dim) work with the same command.
+`demo_catch.py` only writes statistics and the plot unless `--render-seeds` is
+given (`-1` searches for a catching episode first). Both scripts pick the policy's
+observation mode from the checkpoint, so `catch_bc.pt` (12-dim) and
+`catch_bc_A3.pt` (61-dim) run with the same command.
 
 Feeding the trajectory explicitly (the ball's coordinates from the serve, one
 control step at a time, no future information) was measured against the plain
