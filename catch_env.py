@@ -76,12 +76,20 @@ CAGE_HALF = 0.21                # cage footprint half width
 CAGE_LOW, CAGE_HIGH = -0.06, 0.36   # base-frame z window of a catch
 CATCH_Z = 0.30                      # world height where the approach is scored
 VMAX_FORE, VMAX_LAT, WMAX = 4.0, 4.5, 3.0
-OBS_DIM = 12
+TRAJ_POINTS = 16                 # trajectory samples fed to the policy
+OBS_MODES = {                     # what the policy sees
+    "state": 12,                  # robot + current ball state (the shipped policy)
+    "traj": 6 + TRAJ_POINTS * 3 + 1,      # robot + path since the serve
+    "both": 12 + TRAJ_POINTS * 3 + 1,     # robot + ball state + path
+}
+OBS_MODE_FOR_DIM = {v: k for k, v in OBS_MODES.items()}   # checkpoint dim -> mode
+OBS_DIM = OBS_MODES["both"]
 
 
 class CatchEnv:
     def __init__(self, num_envs: int = 32, seed: int = 0, serve_speed=(16.0, 20.0),
-                 serve_clearance=(0.45, 0.8), aim=(-4.9, 0.0), radius=(1.5, 1.0)):
+                 serve_clearance=(0.45, 0.8), aim=(-4.9, 0.0), radius=(1.5, 1.0),
+                 obs_mode="both"):
         self.n = num_envs
         self.model = motrixsim.load_model(XML)
         self.data = motrixsim.SceneData(self.model, batch=[num_envs])
@@ -100,6 +108,7 @@ class CatchEnv:
         # motor order in the MJCF is FL, FR, RL, RR
         self.serve_speed = serve_speed
         self.serve_clearance = serve_clearance
+        self.obs_mode = obs_mode
         self.aim = aim                    # curriculum: where the serve bounces
         self.radius = radius
         self.model.forward_kinematic(self.data)
@@ -107,6 +116,8 @@ class CatchEnv:
         self.done = np.ones(self.n, dtype=bool)
         self.caught = np.zeros(self.n)
         self.prev_bz = np.zeros(self.n)
+        self.traj = np.zeros((self.n, 400, 3), np.float32)   # ball path since the serve
+        self.age = np.zeros(self.n, dtype=int)
         self._pred = None
         self._pred_age = 99
         self.reset()
@@ -161,6 +172,9 @@ class CatchEnv:
         self.caught[idx] = 0.0
         self.done[idx] = False
         self.prev_bz[idx] = pos[idx, self.ball_p[2]]
+        self.traj[idx] = 0.0
+        self.age[idx] = 0
+        self.traj[idx, 0] = pos[idx][:, self.ball_p[:3]]
         self._pred_age = 99
 
     # -------------------------------------------------------------- physics
@@ -266,6 +280,8 @@ class CatchEnv:
         self._drive(np.asarray(action, dtype=float))
         self._advance()
         bp = self.ball_pose()
+        self.age = np.minimum(self.age + 1, self.traj.shape[1] - 1)
+        self.traj[np.arange(self.n), self.age] = bp
         dx, dy, dz = self.base_frame_ball()
         inside = (np.abs(dx) < CAGE_HALF) & (np.abs(dy) < CAGE_HALF) \
             & (dz > CAGE_LOW) & (dz < CAGE_HIGH)
@@ -306,17 +322,24 @@ class CatchEnv:
         p, q = self.robot_pose()
         v = self.model.get_link_velocities(self.data)[:, self.base_i, :3]
         yaw = self.yaw_of(q)
-        bp = self.ball_pose()
-        bv = self.ball_vel()
-        d = bp - p
-        obs = np.concatenate([
+        parts = [
             (p[:, :2] - np.array(START)) / 5.0,      # robot offset from home
             v[:, :2] / 5.0,                           # robot velocity
             np.stack([np.sin(yaw), np.cos(yaw)], axis=1),
-            d / 5.0,                                  # ball relative position
-            bv / 20.0,                                # ball velocity
-        ], axis=1)
-        return obs.astype(np.float32)
+        ]
+        if self.obs_mode in ("state", "both"):
+            bp = self.ball_pose()
+            bv = self.ball_vel()
+            parts.append((bp - p) / 5.0)              # ball relative to the robot
+            parts.append(bv / 20.0)                   # ball velocity
+        if self.obs_mode in ("traj", "both"):
+            frac = np.linspace(0.0, 1.0, TRAJ_POINTS)[None, :]
+            idx = np.clip((frac * self.age[:, None]).astype(int), 0, self.traj.shape[1] - 1)
+            path = self.traj[np.arange(self.n)[:, None], idx]      # (n, K, 3)
+            parts.append((path[:, :, :2] - np.array(START)).reshape(self.n, -1) / 5.0)
+            parts.append(path[:, :, 2].reshape(self.n, -1) / 3.0)
+            parts.append((self.age * self.substeps * self.dt)[:, None] / 4.0)
+        return np.concatenate(parts, axis=1).astype(np.float32)
 
     def obs(self):
         return self._obs()

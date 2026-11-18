@@ -12,7 +12,7 @@ import argparse
 import numpy as np
 import torch
 
-from catch_env import CatchEnv, OBS_DIM
+from catch_env import CatchEnv, OBS_DIM, OBS_MODE_FOR_DIM
 from ball_physics import plan_serve
 from train_catch import VMAX, ActorCritic
 
@@ -31,9 +31,15 @@ def exact_serves(n, rng, speed, clearance):
     return out
 
 
+def obs_mode_of(path):
+    """The observation mode a checkpoint was trained with (from its input size)."""
+    ckpt = torch.load(path, map_location="cpu")
+    return OBS_MODE_FOR_DIM.get(int(ckpt.get("obs_dim", OBS_DIM)), "both")
+
+
 def load_policy(path):
     ckpt = torch.load(path, map_location="cpu")
-    net = ActorCritic(obs_dim=ckpt.get("obs_dim", OBS_DIM))
+    net = ActorCritic(obs_dim=ckpt.get("obs_dim", OBS_DIM), hidden=ckpt.get("hidden", 128))
     net.load_state_dict(ckpt["model"])
     net.eval()
     return net
@@ -54,7 +60,7 @@ def main():
     net = load_policy(args.policy)
     rng = np.random.default_rng(7)
     serves = exact_serves(args.episodes, rng, args.speed, args.clearance)
-    env = CatchEnv(num_envs=args.episodes, seed=0)
+    env = CatchEnv(num_envs=args.episodes, seed=0, obs_mode=obs_mode_of(args.policy))
     for e, (spawn, v0) in enumerate(serves):
         p = env.data.dof_pos.copy()
         v = env.data.dof_vel.copy()
@@ -92,7 +98,7 @@ def render(policy_path, seed=0):
     net = load_policy(policy_path)
     rng = np.random.default_rng(seed)
     spawn, v0 = exact_serves(1, rng, (16.0, 20.0), (0.45, 0.8))[0]
-    env = CatchEnv(num_envs=1, seed=0)
+    env = CatchEnv(num_envs=1, seed=0, obs_mode=obs_mode_of(policy_path))
     p = env.data.dof_pos.copy()
     v = env.data.dof_vel.copy()
     p[0, env.ball_p[:3]] = spawn

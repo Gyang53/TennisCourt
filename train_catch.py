@@ -78,7 +78,7 @@ def train(args):
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
     env = CatchEnv(num_envs=args.envs, seed=args.seed)
-    net = ActorCritic()
+    net = ActorCritic(hidden=args.hidden)
     if args.init:                       # continue from a (cloned) policy
         ckpt = torch.load(args.init, map_location="cpu")
         net.load_state_dict(ckpt["model"])
@@ -170,9 +170,9 @@ def train(args):
                   f"{stats['steps']/sp/1e3:6.1f}k steps/s  {sp/60:5.1f} min", flush=True)
             if it % args.save_every == 0:
                 Path(args.out).parent.mkdir(parents=True, exist_ok=True)
-                torch.save({"model": net.state_dict(), "obs_dim": OBS_DIM}, args.out)
+                torch.save({"model": net.state_dict(), "obs_dim": OBS_DIM, "hidden": HIDDEN}, args.out)
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
-    torch.save({"model": net.state_dict(), "obs_dim": OBS_DIM}, args.out)
+    torch.save({"model": net.state_dict(), "obs_dim": OBS_DIM, "hidden": HIDDEN}, args.out)
     print(f"saved {args.out}")
     return net
 
@@ -193,6 +193,7 @@ def main():
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--log-every", type=int, default=5)
     ap.add_argument("--save-every", type=int, default=50)
+    ap.add_argument("--hidden", type=int, default=128)
     ap.add_argument("--init", default="", help="checkpoint to start from")
     ap.add_argument("--out", default="policies/catch_ppo.pt")
     train(ap.parse_args())

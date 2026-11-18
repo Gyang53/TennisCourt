@@ -124,7 +124,12 @@ wall second at 32-48 envs, measured).
 
 * action: vehicle-frame `(forward, left, yaw rate)`, normalised to `[-1, 1]` and
   mapped through the same wheel IK + torque servo as the ROS bridge
-* observation: robot offset/velocity/heading, ball relative position/velocity
+* observation, three selectable modes (`CatchEnv(obs_mode=...)`; the checkpoint's
+  input size picks it automatically in `eval_catch.py`):
+  - `state` (12): robot offset/velocity/heading + current ball position/velocity
+  - `traj` (55): robot state + **the ball's path since the serve**, resampled to 16
+    points + elapsed time
+  - `both` (61, default): state and trajectory together
 * reward: potential shaping on the cage-to-ball distance, `+1` when the ball
   ends up inside the cage, episodes end on catch / ball out of the play area /
   timeout
@@ -139,6 +144,21 @@ wall second at 32-48 envs, measured).
 
 `catch_env.py` holds the vectorised environment; `eval_catch.py` grades a policy
 with the same exact serve planner the ROS bridge uses.
+
+Feeding the trajectory explicitly (the ball's coordinates from the serve, one
+control step at a time, no future information) was measured against the plain
+state observation, same seeds and serve distributions:
+
+| policy | 12-16 m/s r0.5 | 12-16 m/s r1.5 | 16-20 m/s r3.0 |
+|---|---|---|---|
+| `state` 12 dims (128 wide) | 59% | 34% | 0% |
+| `traj` 55 dims (128 wide) | 9% | 0% | 0% |
+| `both` 61 dims (256 wide) | **62%** | **38%** | 0% |
+
+The trajectory alone is *harder* to learn (the network has to recover the
+ballistics from 16 samples; BC fit MSE 0.0099 vs 0.0033 with state included),
+and no input representation lifts the 16-20 m/s case, because the teacher that
+generates the demonstrations is the ceiling there.
 
 PPO from scratch did not find this task (the catch window is ~0.2 m wide and only
 pays out once per episode), so the policy is first distilled from a scripted

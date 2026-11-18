@@ -63,6 +63,7 @@ def main():
     ap.add_argument("--epochs", type=int, default=40)
     ap.add_argument("--batch", type=int, default=512)
     ap.add_argument("--lr", type=float, default=3e-4)
+    ap.add_argument("--hidden", type=int, default=128)
     ap.add_argument("--out", default="policies/catch_bc.pt")
     args = ap.parse_args()
 
@@ -70,7 +71,7 @@ def main():
     obs, act = collect(env, args.episodes)
     print(f"dataset: {obs.shape[0]} transitions", flush=True)
 
-    net = ActorCritic()
+    net = ActorCritic(hidden=args.hidden)
     opt = torch.optim.Adam(net.parameters(), lr=args.lr)
     O, A = torch.from_numpy(obs), torch.from_numpy(act)
     n = O.shape[0]
@@ -88,7 +89,8 @@ def main():
         if epoch % 5 == 0 or epoch == args.epochs - 1:
             print(f"epoch {epoch:3d}  mse {total / n:.5f}", flush=True)
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
-    torch.save({"model": net.state_dict(), "obs_dim": int(O.shape[1])}, args.out)
+    torch.save({"model": net.state_dict(), "obs_dim": int(O.shape[1]),
+                    "hidden": net.trunk[0].out_features}, args.out)
     print(f"saved {args.out}")
 
 

@@ -14,7 +14,7 @@ import time
 import numpy as np
 import torch
 
-from catch_env import CatchEnv
+from catch_env import CatchEnv, OBS_MODE_FOR_DIM
 from eval_catch import load_policy
 from train_catch import VMAX
 
@@ -22,9 +22,9 @@ COURT_X, COURT_Y = 11.885, 5.485
 SERVICE_X, SINGLES_Y = 6.4, 4.115
 
 
-def run_episodes(net, episodes, radius, speed, clear, record=8, steps=240):
+def run_episodes(net, episodes, radius, speed, clear, record=8, steps=240, obs_mode="both"):
     env = CatchEnv(num_envs=episodes, seed=21, serve_speed=speed, serve_clearance=clear,
-                   radius=radius, aim=(-4.9, 0.0))
+                   radius=radius, aim=(-4.9, 0.0), obs_mode=obs_mode)
     caught = np.zeros(episodes)
     ball_path = np.zeros((episodes, steps, 3), np.float32)
     robot_path = np.zeros((episodes, steps, 2), np.float32)
