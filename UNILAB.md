@@ -21,7 +21,41 @@ README; this file records what was tried for GPU training.
   isaacsim, isaacgym`. The CPU ones need their own extras
   (`unilab[mujoco]`, `unilab[motrix]`), i.e. `uv sync --extra mujoco --extra motrix`.
 
-## Hard blocker: mjwarp wheels vs released MuJoCo
+## SOLVED: mjwarp runs on the GPU with PyPI versions
+
+The earlier "ABI mismatch" was **my API misuse**, not upstream: in current mjwarp
+`mjwarp.put_model(mjm)` returns a *wrapped model object*, and `step` must be given
+that object - passing MuJoCo's `MjModel` made it look for C fields (`nbranch`,
+`has_flex_snh`, ...) that the versions in use legitimately lack.
+
+Working combination, straight from PyPI (no nightly index needed):
+
+```bash
+uv pip install --python /home/yangg/data/miniforge3/envs/ms/bin/python \
+    "mujoco==4.0.1" "mujoco-warp==4.0.1"
+```
+
+```python
+mjm = mujoco.MjModel.from_xml_path("rally_court.xml")
+m = mjwarp.put_model(mjm)          # <- wrapped model
+d = mjwarp.put_data(mjm, mujoco.MjData(mjm), nworld=8192)
+mjwarp.step(m, d)                  # <- pass the wrapped model
+```
+
+Measured on the RTX 5060 with `rally_court.xml` (42 bodies, 251 geoms, 36 rollers),
+500 Hz physics:
+
+| worlds | throughput |
+|---|---|
+| 1024 | 0.22M env-steps/s |
+| 4096 | 0.57M env-steps/s |
+| **8192** | **0.67M env-steps/s** (sustained) |
+
+GPU load during the run: **78 W, 95% utilisation** (contrast: the CPU pipeline's
+25 W idle-ish card). For reference MotrixSim on the CPU does 79k env-steps/s at
+batch 32, so GPU physics is ~8.5x faster at 8192 worlds.
+
+## (Historical) the nightly-index detour
 
 GPU physics needs `mujoco_warp.put_model`, which fails on a missing C struct field
 for **every published wheel/mujoco combination** tried:
