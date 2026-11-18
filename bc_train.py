@@ -17,6 +17,7 @@ import torch
 import torch.nn as nn
 
 from catch_env import CatchEnv
+from teacher_oracle import record
 from train_catch import VMAX, ActorCritic, apply_phase
 
 VMAX_NP = np.asarray(VMAX, dtype=float)
@@ -35,6 +36,49 @@ def teacher_action(env):
     left = np.sum(v_des * np.stack([c, s], axis=1), axis=1)
     raw = np.stack([fwd, left, np.zeros(len(fwd))], axis=1)
     return np.clip(raw / VMAX_NP, -1.0, 1.0)
+
+
+def teacher_action_for(env, tx, ty, tc, lead=0.6, kv=0.8):
+    """P on the recorded catch point with an inner velocity loop (mecanum
+    strafing otherwise leaves a ~0.24 m steady-state error)."""
+    p, q = env.robot_pose()
+    yaw = env.yaw_of(q)
+    vw = env.model.get_link_velocities(env.data)[:, 0, :2]
+    err = np.array([[tx, ty]]) - p[:, :2]
+    g = np.where((env.t < tc - lead)[:, None], 6.0, 9.0)
+    v_ref = np.clip(g * err, -4.0, 4.0)
+    v_cmd = np.clip(v_ref + kv * (v_ref - vw), -4.5, 4.5)
+    c, s = np.cos(yaw), np.sin(yaw)
+    fwd = np.sum(v_cmd * np.stack([s, -c], axis=1), axis=1)
+    left = np.sum(v_cmd * np.stack([c, s], axis=1), axis=1)
+    raw = np.stack([fwd, left, np.zeros(len(fwd))], axis=1)
+    return np.clip(raw / VMAX_NP, -1.0, 1.0)
+
+
+def collect_oracle(episodes, seed0, sp, cl, radius, obs_mode="both"):
+    """Two-pass demos: record the first reachable catch point in a parked pass,
+    then replay the same serve with the teacher and record (obs, action)."""
+    obs_buf, act_buf = [], []
+    kept = 0
+    for k in range(episodes):
+        seed = seed0 + k
+        tgt = record(seed, sp, cl, radius)
+        if tgt is None:
+            continue
+        tx, ty, tc = tgt
+        env = CatchEnv(num_envs=1, seed=seed, serve_speed=sp, serve_clearance=cl,
+                       radius=(radius, radius), obs_mode=obs_mode)
+        for _ in range(240):
+            a = teacher_action_for(env, tx, ty, tc)
+            obs = env.obs()
+            obs, _r, done, _i = env.step(a * VMAX_NP)
+            obs_buf.append(obs[0])
+            act_buf.append(a[0].astype(np.float32))
+            if done[0]:
+                break
+        kept += 1
+    print(f"collected from {kept}/{episodes} serves", flush=True)
+    return np.stack(obs_buf), np.stack(act_buf)
 
 
 def collect(env, episodes, phases=(0, 1, 2, 3, 4)):
@@ -64,11 +108,17 @@ def main():
     ap.add_argument("--batch", type=int, default=512)
     ap.add_argument("--lr", type=float, default=3e-4)
     ap.add_argument("--hidden", type=int, default=128)
+    ap.add_argument("--oracle", action="store_true", help="two-pass oracle demos")
+    ap.add_argument("--speed", type=float, nargs=2, default=(12.0, 16.0))
+    ap.add_argument("--radius", type=float, default=1.5)
     ap.add_argument("--out", default="policies/catch_bc.pt")
     args = ap.parse_args()
 
-    env = CatchEnv(num_envs=args.envs, seed=1)
-    obs, act = collect(env, args.episodes)
+    if args.oracle:
+        obs, act = collect_oracle(args.episodes, 600, args.speed, (0.6, 1.0), args.radius)
+    else:
+        env = CatchEnv(num_envs=args.envs, seed=1)
+        obs, act = collect(env, args.episodes)
     print(f"dataset: {obs.shape[0]} transitions", flush=True)
 
     net = ActorCritic(hidden=args.hidden)
