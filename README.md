@@ -284,6 +284,16 @@ labels are a function of the input and distillation works.
 This is the policy to use now: it halves the gap on the normal serves and, for the
 first time, catches half of the full-range fast serves (16-20 m/s), which was 0%.
 
+### Startup hop
+
+Commanding the full 4.5 m/s lateral speed from rest makes the mecanum rollers slip
+and pitches the chassis up 30 mm for ~0.3 s - the visible "jump" at the start of an
+episode. `_drive` now ramps the commanded body velocity at 20 m/s^2 for the first
+0.5 s of an episode: the hop drops to 8 mm and the catch rates are unchanged
+(52 / 65 / 48% at 12-16 r0.5 / r1.5 and 16-20 r3.0, versus 62 / 52 / 50 before, the
+spread being serve-sample noise). Ramping for the whole episode instead costs 40
+points at the tightest distribution, because the policy needs its braking.
+
 ### What was tried on the fast serves (did not pay off yet)
 
 Putting the catch point and its time-to-arrival into the observation (12 -> 15

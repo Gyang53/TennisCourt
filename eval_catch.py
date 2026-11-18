@@ -5,6 +5,7 @@ serve, requested speed and net clearance) rather than the training sampler.
 
     .venv/bin/python eval_catch.py --episodes 48
 """
+
 from __future__ import annotations
 
 import argparse
@@ -12,8 +13,8 @@ import argparse
 import numpy as np
 import torch
 
-from catch_env import CatchEnv, OBS_DIM, OBS_MODE_FOR_DIM
 from ball_physics import plan_serve
+from catch_env import OBS_DIM, OBS_MODE_FOR_DIM, CatchEnv
 from train_catch import VMAX, ActorCritic
 
 
@@ -22,9 +23,13 @@ def exact_serves(n, rng, speed, clearance):
     out = []
     while len(out) < n:
         side = 1.0 if rng.random() < 0.5 else -1.0
-        spawn = np.array([11.885 + rng.uniform(0.2, 1.4),
-                          side * rng.uniform(0.3, 3.8),
-                          rng.uniform(2.0, 2.6)])
+        spawn = np.array(
+            [
+                11.885 + rng.uniform(0.2, 1.4),
+                side * rng.uniform(0.3, 3.8),
+                rng.uniform(2.0, 2.6),
+            ]
+        )
         v0, _, _ = plan_serve(rng, spawn, rng.uniform(*speed), rng.uniform(*clearance))
         if v0 is not None:
             out.append((spawn, v0))
@@ -37,9 +42,11 @@ def obs_mode_of(path):
     return OBS_MODE_FOR_DIM.get(int(ckpt.get("obs_dim", OBS_DIM)), "both")
 
 
-def load_policy(path):
+def load_policy(path) -> ActorCritic:
     ckpt = torch.load(path, map_location="cpu")
-    net = ActorCritic(obs_dim=ckpt.get("obs_dim", OBS_DIM), hidden=ckpt.get("hidden", 128))
+    net = ActorCritic(
+        obs_dim=ckpt.get("obs_dim", OBS_DIM), hidden=ckpt.get("hidden", 128)
+    )
     net.load_state_dict(ckpt["model"])
     net.eval()
     return net
@@ -84,7 +91,9 @@ def main():
         if done.all():
             break
     n = min(args.episodes, len(caught))
-    print(f"episodes {n}  caught {int(caught.sum())}  catch rate {100*caught.mean():.0f}%")
+    print(
+        f"episodes {n}  caught {int(caught.sum())}  catch rate {100 * caught.mean():.0f}%"
+    )
 
 
 def render(policy_path, seed=0):
@@ -92,6 +101,7 @@ def render(policy_path, seed=0):
     import time
 
     import motrixsim.render as mr
+
     from ball_physics import COURT_X
     from catch_env import START
 
@@ -113,7 +123,9 @@ def render(policy_path, seed=0):
     with mr.RenderApp(headless=False, fps=60) as app:
         app.launch(env.model, batch=1)
         cam = app.system_camera
-        cam.set_view(lookat=(START[0] + 2.0, 0.0, 0.6), distance=7.0, elevation=-14, azimuth=-150)
+        cam.set_view(
+            lookat=(START[0] + 2.0, 0.0, 0.6), distance=7.0, elevation=-14, azimuth=-150
+        )
         for step in range(240):
             obs = env.obs()
             with torch.no_grad():
@@ -129,7 +141,9 @@ def render(policy_path, seed=0):
                     except Exception:
                         img = None
                     if img is not None:
-                        img.save_to_disk(f"/home/yangg/data/tennis_robot/catch_{step:03d}.png")
+                        img.save_to_disk(
+                            f"/home/yangg/data/tennis_robot/catch_{step:03d}.png"
+                        )
                         break
                     time.sleep(1 / 60)
             if env.caught[0] or env.done[0]:

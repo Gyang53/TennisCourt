@@ -119,6 +119,9 @@ CAGE_HALF = 0.21                # cage footprint half width
 CAGE_LOW, CAGE_HIGH = -0.06, 0.36   # base-frame z window of a catch
 CATCH_Z = 0.30                      # world height where the approach is scored
 VMAX_FORE, VMAX_LAT, WMAX = 4.0, 4.5, 3.0
+ACCEL_LIMIT = 20.0               # m/s^2 ramp on the commanded body velocity
+SOFT_START = 0.4                 # s: the ramp only applies at the start of an episode
+WHEEL_SLEW = 10.0                # rad/s per control step on the wheel speed target
 TRAJ_POINTS = 16                 # trajectory samples fed to the policy
 OBS_MODES = {                     # what the policy sees
     "state": 12,                  # robot + current ball state (the shipped policy)
@@ -165,6 +168,9 @@ class CatchEnv:
         self.age = np.zeros(self.n, dtype=int)
         self._pred = None
         self._pred_age = 99
+        self._minz = np.full(self.n, np.inf)
+        self._v_cmd = None
+        self._wheel_ref = None
         self.reset()
 
     # ------------------------------------------------------------- utilities
@@ -225,6 +231,10 @@ class CatchEnv:
         self.prev_bz[idx] = pos[idx, self.ball_p[2]]
         self.traj[idx] = 0.0
         self.age[idx] = 0
+        if self._v_cmd is not None:
+            self._v_cmd[idx] = 0.0
+        if self._wheel_ref is not None:
+            self._wheel_ref[idx] = 0.0
         self.traj[idx, 0] = pos[idx][:, self.ball_p[:3]]
         self._pred_age = 99
 
@@ -260,18 +270,42 @@ class CatchEnv:
         self.t += self.substeps * self.dt
 
     def _drive(self, action):
-        """Vehicle-frame (forward, left, yaw) -> wheel speed targets -> torques."""
+        """Vehicle-frame (forward, left, yaw) -> wheel speed targets -> torques.
+
+        The commanded body velocity is ramped (ACCEL_LIMIT m/s^2): the policy can
+        ask for the full 4.5 m/s at t=0, and without the ramp the wheel servo slams
+        the wheels to ~50 rad/s in one step, they slip, and the chassis pitches up
+        30 mm - the visible ``jump`` at startup.
+        """
         fwd = np.clip(action[:, 0], -VMAX_FORE, VMAX_FORE)
         left = np.clip(action[:, 1], -VMAX_LAT, VMAX_LAT)
         yaw = np.clip(action[:, 2], -WMAX, WMAX)
+        target = np.stack([fwd, left], axis=1)
+        if self._v_cmd is None:
+            self._v_cmd = np.zeros_like(target)
+        # soft start: full-lateral commands from rest make the mecanum rollers slip
+        # and pitch the chassis up ~30 mm.  20 m/s^2 for the first 0.5 s removes the
+        # visible hop while reaching full speed in ~0.22 s.
+        soft = (self.t < SOFT_START)[:, None]
+        step = ACCEL_LIMIT * (self.substeps * self.dt)
+        delta = np.clip(target - self._v_cmd, -step, step)
+        self._v_cmd = np.where(soft, self._v_cmd + delta, target)
+        fwd = self._v_cmd[:, 0]
+        left = self._v_cmd[:, 1]
         # vehicle (forward, left) -> base_link (left, -forward)
         vx_b, vy_b = left, -fwd
         c = -vx_b / G_FORE
         l = vy_b / G_LAT
         y = yaw / G_YAW
         targets = np.stack([c + l + y, c - l - y, c - l + y, c + l - y], axis=1)
+        # slew-limit the *wheel* targets: an instantaneous jump to ~46 rad/s makes
+        # the wheels slip and the chassis pitch up 30 mm at startup.  10 rad/s per
+        # control step reaches full speed in ~0.1 s, so the motion is unaffected.
+        if self._wheel_ref is None:
+            self._wheel_ref = np.zeros_like(targets)
+        self._wheel_ref += np.clip(targets - self._wheel_ref, -WHEEL_SLEW, WHEEL_SLEW)
         w = self.data.dof_vel[:, self.wheel_v]
-        self.data.actuator_ctrls = np.clip(WHEEL_KP * (targets - w),
+        self.data.actuator_ctrls = np.clip(WHEEL_KP * (self._wheel_ref - w),
                                            -TORQUE_LIMIT, TORQUE_LIMIT).astype(np.float32)
 
     # ------------------------------------------------------------ intercept
