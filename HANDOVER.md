@@ -39,6 +39,40 @@
 * **GPU 教师只有 27%**（68/256），MotrixSim 同教师 60–90%
 * 混杂开销：经 env 层 93k physics-steps/s（裸物理 670k），numpy↔warp 每次控制步搬运是瓶颈
 
+## MotrixLab 接入（已完成并跑通训练入口）
+
+改动都在 `/home/yangg/data/MotrixLab`（上游仓库克隆，**未提交**，便于 `git pull`）：
+
+| 文件 | 内容 |
+|---|---|
+| `motrix_envs/src/motrix_envs/basic/tennis_catch/tennis_catch.xml` + `meshes/` | 我们的 42-body 模型（抄自 `rally_court.xml`）|
+| `.../tennis_catch/cfg.py` | `@registry.envcfg("tennis_catch")` + `DirectEnvCfg`（`SimCfg(dt=0.0005)`、`ctrl_dt=0.02`、`max_episode_seconds=4.0`、发球/奖励参数）|
+| `.../tennis_catch/tennis_catch.py` | `@registry.env("tennis_catch")` `DirectEnv`：12 维观测、3 维动作（车体系 fwd/left/yaw）、驱动斜坡 + 麦轮 IK + 力矩伺服、接球几何判定、奖励 shaping |
+| `.../tennis_catch/serve.py` | 向量化发球采样（网高间隙解析判定）|
+| `basic/__init__.py` | 加一行 `tennis_catch` |
+| `configs/task/tennis_catch/skrl.ppo.yaml`、`rslrl.ppo.yaml` | 任务配方（`rollouts=32`、128×2、lr 5e-4）|
+
+训练命令（**在 MotrixLab 根目录**）：
+```bash
+source .venv/bin/activate
+mxlab train task=tennis_catch/skrl.ppo num_envs=512 logging.interval=10
+# 结果: runs/tennis_catch/skrl/torch/ppo/<timestamp>/{checkpoints,summaries}
+mxlab play env=tennis_catch policy=runs/.../checkpoints/best_agent.pt
+```
+
+### 接入时踩的坑（MotrixLab/MotrixSim 后端）
+
+1. `BodyPositionWrite` 等声明式写**只对第一个浮基生效**（我们的球是第二个浮基，写入静默无效）→ reset 必须走 `sim._data.set_dof_pos/set_dof_vel`（和 `ros2_bridge.py` 同一套 API）。
+2 `_named_body` 按 **body 名**（"base"/"ball"）解析，不是浮基名；自由关节名不在 `joint_names` 里。
+3. **dof 索引必须从模型取**：42 body 里有 36 个辊子关节夹在 wheels 和 ball 之间 → ball 在 dof_pos **47:54**、dof_vel **46:52**（wheels 在 6/16/26/36），硬编码 11/10 会把球的速度写到角速度上。
+4. 需要 `meshes/` 目录一起放进包（MJCF 用相对 `meshes/...` 路径）。
+5. `SkrlCfg` 没有 `num_steps_per_env`（那是 RSLRL 的字段），SKRL 用 `algo.agent.rollouts`；未知键 Hydra 直接报错。
+6. MotrixLab venv 里装的是 `motrixsim_core 0.10.2.dev132873`（开发构建），与我换装 0.10.1 后**性能同量级**（3.1k vs 5.2k env-steps/s）——之前记的 "130k env-steps/s" 是错的（那是无辊子/无场地接触的简化模型）。
+
+### 实测性能（重要，纠正历史数字）
+
+裸 `motrixsim.step_n(d, 40)`，1024 世界：**5.2k env-steps/s = 0.21M physics substeps/s**（参考 venv 3.1k）。即这个模型（36 辊子 × 地面接触 + 252 geom）每个世界每个控制步约 0.2 ms。训练吞吐因此约 **5k env-steps/s，1M 步 ≈ 3.5 分钟**；10M 步 ≈ 35 分钟。
+
 ## 下一步（按顺序）
 
 1. **GPU 诊断 27%**：在记录的真实穿越时刻量笼坐标系下的脱靶距离（CPU 侧同一套方法曾定位出"目标定义错误"和"横移滑移"）。若属跟踪问题，把辊子接触/摩擦参数按实测驱动规格（加速 3.5/2.5、减速 5.0、vmax 4.0/4.5）拟合。
