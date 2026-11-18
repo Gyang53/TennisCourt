@@ -31,6 +31,9 @@ from catch_env import CatchEnv
 
 OBS_DIM, ACT_DIM, WIDTH = 12, 3, 128
 NORMALIZER_EPS = 1e-8
+# measured: this policy catches 97% deterministically, 64% at std 0.1 and 30% at
+# std 0.3, so the exploration band is the fine-tuning budget, not a detail
+EXPLORE_STD = 0.1
 
 
 def build_net() -> nn.Sequential:
@@ -95,7 +98,7 @@ def export(net, mean: np.ndarray, std: np.ndarray, count: int, template: pathlib
     # the template checkpoint belongs to a from-scratch run that drifted to
     # std ~2.7; at that width the distilled policy is drowned in noise, so the
     # exploration band is set here instead of inherited
-    state["log_std_parameter"] = torch.full((ACT_DIM,), float(np.log(0.3)))
+    state["log_std_parameter"] = torch.full((ACT_DIM,), float(np.log(EXPLORE_STD)))
     state["mean_layer.bias"] = modules[2].bias.detach().cpu().clone()
     # the normalizer must match the data the policy was fitted on: fresh training
     # runs start from the checkpoint's old statistics otherwise

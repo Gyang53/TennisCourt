@@ -176,6 +176,20 @@ a = net(x)                                            # 12->128->128->3 ELU
 `bc_warmstart.py` 现在自带演示缓存（`/tmp/tennis_bc_dataset.npz`），重拟合 1 分钟内完成。
 微调仍需温和超参：`lr 5e-5`、`entropy_loss_scale 0`、`rollouts 64`（`lr 5e-4` 会在数百步内把 97% 的策略打崩）。
 
+## 最后一个关键 bug：`models.separate` 默认 false → 共享网络
+
+诊断打点（`INITDBG`）显示 `agent.policy` 与 `agent.value` 是**同一个 `Shared` 对象（id 相同）**：MotrixLab 的 SKRL 配方默认 **policy 与 value 共享网络**，于是 `init_policy` 先灌 BC 权重、再灌旧 value 权重，**后者覆盖前者** —— 训练里跑的从来不是 BC 策略（这解释了此前所有"离线 97%、训练 0%"）。
+
+修复三件套（都在 `/home/yangg/data/MotrixLab`）：
+
+1. 任务配方加 `algo.models.separate: true`（policy/value 分开）与 `clip_actions: true`；
+2. `init_policy` 只加载 **policy**（新 critic 从零开始更稳），并 `strict=False`（共享模型写出的 checkpoint 带 `value_layer.*`）；
+3. 热启动时**冻结观测归一化**（`_FrozenScaler`），避免统计量漂移把策略输入带离拟合分布。
+
+验证：`catch (max)` 稳定出现 1.0、`catch (mean) ≈ 0.002–0.009`（此前恒 0）。
+
+另外量化了探索噪声的代价（同一策略、框架 env、1000 回合）：**确定性 97% / std 0.1 → 64% / std 0.3 → 30%** —— 所以热启动的 `log_std` 设为 std 0.1，不是细节。
+
 ## 下一步（按顺序）
 
 1. **GPU 诊断 27%**：在记录的真实穿越时刻量笼坐标系下的脱靶距离（CPU 侧同一套方法曾定位出"目标定义错误"和"横移滑移"）。若属跟踪问题，把辊子接触/摩擦参数按实测驱动规格（加速 3.5/2.5、减速 5.0、vmax 4.0/4.5）拟合。
