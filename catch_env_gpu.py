@@ -28,30 +28,34 @@ CAGE_LOW, CAGE_HIGH = -0.06, 0.36
 CATCH_Z = 0.30
 VMAX = np.array([4.0, 4.5, 3.0])
 WHEELS = ("FL", "FR", "RL", "RR")
-DRAG_DENSITY = 1.2       # kg/m^3, MuJoCo fluid model
+DRAG_DENSITY = 0.9       # fitted: 15 m/s launch must keep 0.857 of its speed after 0.5 s
 DRAG_VISCOSITY = 1.8e-5  # Pa s
-BOUNCE_SOLREF = "0.002 0.2"   # contact restitution for ball <-> ground
+BOUNCE_SOLREF = "0.01 0.1"    # fitted: 2.54 m drop rebounds 1.33 m (ITF: 1.35)
 
 
-def _patched_xml(path: str) -> str:
+def _patched_xml(path: str, density: float = None, viscosity: float = None,
+                 solref: str = None, njmax: int = 0) -> str:
     """Add MuJoCo's native fluid drag, a bouncy ball/floor contact, and contact
     headroom: the 36 mecanum rollers generate far more than MuJoCo's default 64
     constraints per world (`nefc overflow` kills the physics otherwise)."""
+    density = DRAG_DENSITY if density is None else density
+    viscosity = DRAG_VISCOSITY if viscosity is None else viscosity
+    solref = BOUNCE_SOLREF if solref is None else solref
     with open(path) as f:
         s = f.read()
     s = s.replace('<option timestep="0.0005"',
-                  f'<option density="{DRAG_DENSITY}" viscosity="{DRAG_VISCOSITY}" timestep="0.0005"')
-    s = s.replace('solref="0.002 1.0"', f'solref="{BOUNCE_SOLREF}"')   # ball <-> ground pair
-    s = s.replace("  <option ", '  <size njmax="2000" nconmax="4000"/>\n  <option ', 1)
+                  f'<option density="{density}" viscosity="{viscosity}" timestep="0.0005"')
+    s = s.replace('solref="0.002 1.0"', f'solref="{solref}"')   # ball <-> ground pair
     return s
 
 
 class CatchEnvGPU:
     def __init__(self, num_envs=4096, seed=0, serve_speed=(12.0, 16.0),
                  serve_clearance=(0.6, 1.0), radius=(1.5, 1.5), aim=(-4.9, 0.0),
-                 xml=XML, ctrl_hz=CTRL_HZ):
+                 xml=XML, ctrl_hz=CTRL_HZ, density=None, viscosity=None, solref=None):
         self.n = num_envs
-        self.mjm = mujoco.MjModel.from_xml_string(_patched_xml(xml))
+        self.mjm = mujoco.MjModel.from_xml_string(
+            _patched_xml(xml, density, viscosity, solref))
         self.m = mjwarp.put_model(self.mjm)
         self.mjd = mujoco.MjData(self.mjm)
         # the 36 mecanum rollers blow past MuJoCo's default 64 constraints per
@@ -117,6 +121,26 @@ class CatchEnvGPU:
         self.t[:] = 0.0
         self.done[:] = False
         self.caught[:] = 0.0
+
+    def record_catch_points(self, z_enter=0.52, v_eff=3.6, t_react=0.2, steps=240):
+        """Pass 1: park the robots and record, from the engine, where each ball first
+        enters the cage window within reach.  Cheap here: one batched pass."""
+        self._host[:, 0:7] = np.tile([-2.0, -8.0, 0.1555, 1.0, 0.0, 0.0, 0.0], (self.n, 1))
+        self._push()
+        self.t[:] = 0.0
+        found = np.zeros(self.n, dtype=bool)
+        for _ in range(steps):
+            self.step(np.zeros((self.n, 3)))
+            bp = self.d.xpos.numpy()[:, self.ball_i]
+            d = np.linalg.norm(bp[:, :2] - np.array(START), axis=1)
+            ok = (bp[:, 2] <= z_enter) & ~found & (d <= np.minimum(v_eff * np.maximum(self.t - t_react, 1e-6), 6.0))
+            if ok.any():
+                self.catch_xy[ok] = bp[ok, :2]
+                self.catch_t[ok] = self.t[ok]
+                found |= ok
+            if found.all():
+                break
+        return found
 
     # ------------------------------------------------------------------ physics
     def step(self, action):

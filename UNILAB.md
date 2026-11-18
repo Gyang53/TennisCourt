@@ -75,12 +75,38 @@ overflow warnings. Raw physics throughput of the same model without the env laye
 is 0.67M env-steps/s at 8192 worlds, so the per-control-step numpy<->warp transfers
 are the current bottleneck.
 
-**Not calibrated yet**: MuJoCo's contact stiffness/damping gives a much deader ball
-than the reference - drop 2.54 m rebounds 0.13 m where the ITF-standard reference
-(and the MotrixSim model) gives 1.35 m, and the fluid model's drag is unverified
-against the measured serve flight. Until `solref`/`density`/`viscosity` are fitted
-to those two measurements the scripted teacher cannot score there (2/512), which in
-turn means demo collection on the GPU is not yet usable.
+### Calibration (done)
+
+`calibrate_mjwarp.py` fits the two measurements we own:
+
+| target | fitted parameter | measured |
+|---|---|---|
+| 2.54 m drop rebounds 1.35 m (ITF, = our MotrixSim model) | `solref="0.01 0.1"` | **1.23 m** |
+| 15 m/s launch keeps 0.857 of its speed after 0.5 s (`DRAG_K=0.0223`) | `density="0.9"`, `viscosity="1.8e-5"` | **0.862** |
+
+Note `solref` needs a *large* time constant (0.01 s = 20 physics steps): at 0.002 s
+the soft contact jumps between "no bounce" and energy gain (a 2.54 m drop rebounding
+39 m), which is the same numerical instability the MotrixSim integration showed.
+
+The robot itself transfers cleanly: full forward command gives 2.36 m in 1 s against
+2.5 m on MotrixSim.
+
+### Two-pass recording on the GPU (works, fast)
+
+`record_catch_points()` parks the robots, steps one batched pass and stores each
+ball's first reachable entry into the cage window: **256/256 serves in 33.5 s**
+(the MotrixSim two-pass needed ~10 ms per serve and one pass per serve).
+
+### Where it stands
+
+The GPU teacher with those engine-truth targets catches **27%** (68/256) against
+60-90% for the same teacher on MotrixSim. The ball and the drive are calibrated, so
+the remaining gap is engine behaviour at the catch instant - most likely how the
+mecanum rollers' contacts and the ball's descent line up. Next diagnostic: measure
+the miss distance in the cage frame at the recorded crossing time on the GPU (the
+same measurement that explained the MotrixSim behaviour) and, if it is tracking,
+fit the roller contact/friction parameters to the measured drive spec
+(accel 3.5 / 2.5, decel 5.0 m/s^2, vmax 4.0 / 4.5).
 
 ## (Historical) the nightly-index detour
 
