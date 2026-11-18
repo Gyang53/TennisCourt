@@ -393,7 +393,10 @@ class CatchEnv:
             bp = self.ball_pose()
             # reachability from START, using this env's serve time
             d = np.linalg.norm(bp[:, :2] - np.array(START), axis=1)
-            ok = (bp[:, 2] <= z_enter) & ~found & (d <= v_eff * np.maximum(self.t - t_react, 1e-6))
+            # an env whose episode ended has been reset to a *new* serve: its ball
+            # is not the one we are recording, so it can never be recorded
+            ok = ((bp[:, 2] <= z_enter) & ~found & ~done
+                  & (d <= np.minimum(v_eff * np.maximum(self.t - t_react, 1e-6), 6.0)))
             if ok.any():
                 self.catch_xy[ok] = bp[ok, :2]
                 self.catch_t[ok] = self.t[ok]
