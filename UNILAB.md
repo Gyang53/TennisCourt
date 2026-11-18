@@ -37,6 +37,28 @@ Each error is a *different* field, so the wheels are built against MuJoCo `main`
 newer than any published `mujoco` wheel (`mujoco-core` on PyPI only ships 4.0.0 /
 4.0.1). Warp itself is fine: it enumerates `cuda:0`, RTX 5060, sm_120.
 
+### Source build (tried, also blocked)
+
+Built everything from source on the same day (both repos at main, 2026-11-17):
+
+* MuJoCo **C library**: builds fine (cmake 3.28 + gcc, `libmujoco.so.4.0.2` in
+  `~/data/dev/mujoco_install`), 41 s on 24 cores;
+* `mujoco_warp`: installs fine from source;
+* MuJoCo **Python bindings**: the git checkout cannot build them (upstream's own
+  CMakeLists comment says the git path is stale/unsupported); the **sdist** path
+  works, but `make_sdist.sh` pins `pip==26.2` which does not exist - remove that
+  line and it produces `mujoco_core-4.0.2.tar.gz` in seconds, then
+  `MUJOCO_PATH=<install> MUJOCO_PLUGIN_PATH=<build>/lib/mujoco_plugin pip install`
+  it. `mujoco/_version.py` has to be written and the shell's
+  `_EXPECTED_VERSION` bumped to match, after which `import mujoco` works.
+
+The last step still fails, and it is upstream: `mujoco_warp` main asks for
+`MjModel.nbranch`, which today's MuJoCo main (`mjmodel.h`) does not define, and the
+bindings' committed enum codegen is older than `mjtype.h` (`mjtCtrlInput` missing
+from `_enums`). So **mjwarp main runs ahead of mujoco main** and the two cannot be
+paired from HEAD; a full source build needs the exact MuJoCo commit mjwarp's CI
+pins.
+
 Two ways forward, both outside pip-only setup:
 
 1. **Docker**: use UniLab's `Dockerfile`, which pins the source-built
