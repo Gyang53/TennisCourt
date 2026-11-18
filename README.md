@@ -192,6 +192,34 @@ full-range number up, in order of impact:
    integration is at 0.11-0.14 m; a short-horizon re-plan would close it);
 2. widen the physical catchment (a funnel/backboard over the cage mouth raises
    the ceiling faster than any controller work);
+### Teacher (done) and its distillation (not working yet)
+
+The scripted teacher was aiming at the wrong event: it insisted on the ball's
+descent *after* its first bounce, which only 4-9 of 10 serves ever produce inside
+the playable area. With the catch defined as "the first entry into the cage
+window (world z 0.10-0.52 m), any bounce, that the robot can reach from its
+start" and an inner velocity loop (pure position feedback leaves a 0.24 m
+mecanum strafe error at the arrival), the teacher catches
+
+| serve | teacher | teacher before |
+|---|---|---|
+| 12-16 m/s r0.5 | 92% (22/24) | 0-33% |
+| 12-16 m/s r1.5 | 33% (8/24) | 0-33% |
+| 16-20 m/s r3.0 | 8% (2/24) | 0% |
+
+Run on the whole batch it is fast: `CatchEnv.set_serves` + `record_catch_points`
+(park the robots, record each ball's first reachable entry) then a replay pass
+with `teacher_action`. 24 serves in ~3 s.
+
+Distilling it with behaviour cloning does **not** work yet: the cloned policy
+catches 0% while its teacher catches 33-92% (BC fit MSE 0.0127 on normalised
+actions, i.e. ~0.5 m/s of action error - far too much for a +-0.2 m window). The
+teacher's actions are aggressive (kp 9 plus the velocity loop) and the demo set is
+small (320 serves). Next: smoother teacher gains, 3-5x the demos, and DAgger
+(query the teacher at the states the policy actually visits) instead of plain BC.
+
+The policy to use is still `policies/catch_bc.pt` (59/34/0%).
+
 ### What was tried on the fast serves (did not pay off yet)
 
 Putting the catch point and its time-to-arrival into the observation (12 -> 15
