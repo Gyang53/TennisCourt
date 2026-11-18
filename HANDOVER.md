@@ -214,6 +214,31 @@ a = net(x)                                            # 12->128->128->3 ELU
 
 所以不再重造策略，改为**用交付策略做 PPO 热启动**：`export_skrl_warmstart.py` 把它转成 SKRL checkpoint（`trunk.*→net.*`、`actor.*→mean_layer.*`、std 0.1、**恒等归一化**），任务配方同步改为 `hiddens [256,256]` + `hidden_activation [tanh]`。
 
+## 最终结果：MotrixLab PPO 微调交付策略
+
+起点 = 交付策略 `policies/catch_bc_big.pt`（转成 SKRL 热启动，`std=0.1`、恒等归一化、冻结）；
+`mxlab train task=tennis_catch/skrl.ppo num_envs=512 sim=默认(MotrixSim) algo.agent.learning_rate=1e-4
+algo.agent.entropy_loss_scale=0.0 algo.agent.rollouts=64` → 8000 控制步 = 4.1M env 步 / 19:21。
+
+同一评测口径（框架 env、MotrixSim 后端、192 世界 × 2 轮 ≈ 384 回合/档）：
+
+| 档位 | 起点（交付策略）| 微调后 `policies/catch_ppo.pt` | 变化 |
+|---|---|---|---|
+| 12–16 m/s, r0.5 | 41% | **64%** | **+23** |
+| 12–16 m/s, r1.5 | 55% | 49% | −6 |
+| 16–20 m/s 全范围 | 37% | **39%** | +2 |
+
+训练分布（16–20 m/s, r1.5）同口径：95% → **97%**。权重只移动了 0.9%（actor ΔL2 0.0071 / 范数 0.778）。
+
+**结论**：微调对最紧的档位（r0.5）有显著提升，最难档小幅提升，中间档略降。`policies/catch_ppo.pt` 作为**候选策略**保留，默认仍用 `catch_bc_big.pt`。
+
+### 未解的口径差异（务必注意）
+
+`eval_three_tiers.py`（框架 env）测出的绝对数字明显低于历史口径（`eval_catch.py` + 参考 env 报告的 92/100/54）：同一份交付策略在 r0.5 档只有 41% ✗。两者在**发球采样参数或接球判定**上必然有差异，未定位。因此：
+* 只在同一口径内比较（上表的 +23 / −6 / +2 有效）；
+* 不要跨脚本比较绝对数字；
+* `eval_cross_engine.py` 对 61 维观测仍然不可靠（已发现两处 bug，61 维下仍报 0%），优先用 `eval_three_tiers.py`。
+
 ## 下一步（按顺序）
 
 1. **GPU 诊断 27%**：在记录的真实穿越时刻量笼坐标系下的脱靶距离（CPU 侧同一套方法曾定位出"目标定义错误"和"横移滑移"）。若属跟踪问题，把辊子接触/摩擦参数按实测驱动规格（加速 3.5/2.5、减速 5.0、vmax 4.0/4.5）拟合。
