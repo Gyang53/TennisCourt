@@ -94,7 +94,16 @@ def train(args):
         ckpt = torch.load(args.init, map_location="cpu")
         net.load_state_dict(ckpt["model"])
         print(f"initialised from {args.init}", flush=True)
-    opt = torch.optim.Adam(net.parameters(), lr=args.lr, eps=1e-5)
+    with torch.no_grad():               # low exploration when starting from a clone
+        net.log_std.fill_(args.log_std_init)
+    # separate rates: a cloned policy must not be dragged around by an untrained
+    # critic, which is what destroyed it in the first fine-tune attempt
+    actor_params = [p for n, p in net.named_parameters() if not n.startswith("critic")]
+    critic_params = [p for n, p in net.named_parameters() if n.startswith("critic")]
+    opt = torch.optim.Adam([
+        {"params": actor_params, "lr": args.lr},
+        {"params": critic_params, "lr": args.critic_lr},
+    ], eps=1e-5)
 
     obs = env.obs()
     ep_return = np.zeros(args.envs)
@@ -135,7 +144,7 @@ def train(args):
         with torch.no_grad():
             _, last_v = net(torch.as_tensor(obs, device=dev))
             adv = torch.zeros_like(rew)
-            gae = torch.zeros(args.envs)
+            gae = torch.zeros(args.envs, device=dev)
             for t in reversed(range(args.rollout)):
                 nxt = last_v if t == args.rollout - 1 else val[t + 1]
                 mask = 1.0 - don[t]
@@ -159,6 +168,8 @@ def train(args):
                 s1 = ratio * ADV[b]
                 s2 = ratio.clamp(1 - args.clip, 1 + args.clip) * ADV[b]
                 actor_loss = -torch.min(s1, s2).mean()
+                if it <= args.warmup:            # critic only for the first iterations
+                    actor_loss = actor_loss * 0.0
                 value_loss = (value - RET[b]).pow(2).mean()
                 entropy = dist.entropy().sum(-1).mean()
                 loss = actor_loss + args.vf_coef * value_loss - args.ent_coef * entropy
@@ -182,9 +193,11 @@ def train(args):
                   f"{stats['steps']/sp/1e3:6.1f}k steps/s  {sp/60:5.1f} min", flush=True)
             if it % args.save_every == 0:
                 Path(args.out).parent.mkdir(parents=True, exist_ok=True)
-                torch.save({"model": net.state_dict(), "obs_dim": OBS_DIM, "hidden": HIDDEN}, args.out)
+                torch.save({"model": net.state_dict(), "obs_dim": OBS_DIM,
+                        "hidden": net.trunk[0].out_features}, args.out)
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
-    torch.save({"model": net.state_dict(), "obs_dim": OBS_DIM, "hidden": HIDDEN}, args.out)
+    torch.save({"model": net.state_dict(), "obs_dim": OBS_DIM,
+                        "hidden": net.trunk[0].out_features}, args.out)
     print(f"saved {args.out}")
     return net
 
@@ -207,6 +220,9 @@ def main():
     ap.add_argument("--save-every", type=int, default=50)
     ap.add_argument("--hidden", type=int, default=128)
     ap.add_argument("--device", default="", help="cuda / cpu (default: auto)")
+    ap.add_argument("--critic-lr", type=float, default=1e-3)
+    ap.add_argument("--warmup", type=int, default=0, help="iterations with the actor frozen")
+    ap.add_argument("--log-std-init", type=float, default=-1.0)
     ap.add_argument("--init", default="", help="checkpoint to start from")
     ap.add_argument("--out", default="policies/catch_ppo.pt")
     train(ap.parse_args())

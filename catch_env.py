@@ -469,7 +469,8 @@ class CatchEnv:
                 break
         return found
 
-    def teacher_action(self, lead=0.6, kv=0.0, kp_far=1.5, kp_near=2.5):
+    def teacher_action(self, lead=0.6, kv=0.0, kp_far=1.5, kp_near=2.5,
+                       brake=0.0, early=0.0):
         """Scripted teacher: drive to the recorded catch point, timed, with an
         inner velocity loop (pure position feedback leaves a mecanum strafe
         error of ~0.24 m at the arrival).  Returns normalised actions."""
@@ -477,8 +478,14 @@ class CatchEnv:
         yaw = self.yaw_of(q)
         vw = self.model.get_link_velocities(self.data)[:, self.base_i, :2]
         err = self.catch_xy - p[:, :2]
-        kp = np.where(self.t < self.catch_t - lead, kp_far, kp_near)
+        kp = np.where(self.t < self.catch_t - lead - early, kp_far, kp_near)
         v_ref = np.clip(kp[:, None] * err, -4.0, 4.0)
+        if brake > 0.0:
+            # never command more speed than can be shed in the remaining distance
+            dist = np.linalg.norm(err, axis=1)
+            v_ok = np.sqrt(2.0 * brake * np.maximum(dist, 1e-6))
+            n = np.maximum(np.linalg.norm(v_ref, axis=1, keepdims=True), 1e-6)
+            v_ref = np.minimum(v_ref, v_ref / n * np.minimum(v_ok, 4.0)[:, None])
         v_cmd = np.clip(v_ref + kv * (v_ref - vw), -4.5, 4.5)
         c, s = np.cos(yaw), np.sin(yaw)
         fwd = v_cmd[:, 0] * s - v_cmd[:, 1] * c

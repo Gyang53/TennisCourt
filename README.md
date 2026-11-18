@@ -287,11 +287,23 @@ instead of jumping to the commanded speed - that removed the startup hop
 | `catch_bc_A3.pt` (instant commands, hops at startup) | 62% | 52% | 50% |
 | `catch_bc.pt` (12-dim state obs, shipped before) | 59% | 34% | 0% |
 
-`catch_bc_big.pt` is the policy to use: 92/100/54% with physically correct
-acceleration and no startup hop (live viewport check: 12/20 = 60% on the fastest
-distribution). Note it already matches or beats the scripted teacher at 16-20 m/s,
-so that number is the teacher's ceiling, not the policy's: pushing it further needs
-either a better teacher for fast serves or PPO fine-tuning on top of this policy.
+`catch_bc_big.pt` is the policy to use (the demos default to it): 92/100/54% with
+physically correct acceleration and no startup hop, and 12/20 = 60% in the live
+viewport on the fastest distribution.
+
+Two things do *not* work yet, both measured:
+
+* **PPO fine-tuning** from this policy collapses it (0-2% within 60 iterations)
+  even with a critic-only warmup, lr 1e-4 for the actor / 1e-3 for the critic and
+  log_std starting at -2.5. The hand-rolled PPO is not trustworthy here; use a
+  tested implementation (MotrixLab's SKRL/RSL-RL, or UniLab) rather than more
+  tuning of this one.
+* **GPU physics**. Training does use the GPU for the policy update (60k samples x
+  100 epochs: 7.6 s on the 5060 vs 12 s-class on CPU, 1.7x), which is why the card
+  draws little power: the bottleneck is the CPU physics (MotrixSim's backend is
+  Rust/CPU). `mujoco-warp` installs and Warp sees `cuda:0` (sm_120), but the wheel
+  and the installed `mujoco` are ABI-mismatched (`MjModel.has_flex_snh` missing),
+  so a GPU physics backend needs a matched mujoco/mjwarp pair first.
 
 Training runs on the GPU when one is present (`--device cuda|cpu`, auto-detected;
 the RTX 5060 is used at capability 12.0). Note the honest split: the policy update
