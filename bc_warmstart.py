@@ -29,16 +29,16 @@ from ball_physics import sample_serve
 from bc_train import VMAX_NP, collect_batched
 from catch_env import CatchEnv
 
-OBS_DIM, ACT_DIM, WIDTH = 12, 3, 128
+ACT_DIM, WIDTH = 3, 128
 NORMALIZER_EPS = 1e-8
 # measured: this policy catches 97% deterministically, 64% at std 0.1 and 30% at
 # std 0.3, so the exploration band is the fine-tuning budget, not a detail
 EXPLORE_STD = 0.1
 
 
-def build_net() -> nn.Sequential:
+def build_net(obs_dim: int) -> nn.Sequential:
     return nn.Sequential(
-        nn.Linear(OBS_DIM, WIDTH),
+        nn.Linear(obs_dim, WIDTH),
         nn.ELU(),
         nn.Linear(WIDTH, WIDTH),
         nn.ELU(),
@@ -47,7 +47,7 @@ def build_net() -> nn.Sequential:
 
 
 def train_bc(obs: np.ndarray, act: np.ndarray, epochs: int, batch: int, device: str):
-    net = build_net().to(device)
+    net = build_net(obs.shape[1]).to(device)
     opt = torch.optim.Adam(net.parameters(), lr=1e-3)
     x = torch.from_numpy(obs).to(device)
     y = torch.from_numpy(act).to(device)
@@ -67,10 +67,10 @@ def train_bc(obs: np.ndarray, act: np.ndarray, epochs: int, batch: int, device: 
     return net.eval()
 
 
-def bc_catch_rate(net, num_envs: int, mean, std) -> float:
+def bc_catch_rate(net, num_envs: int, mean, std) -> float:  # noqa: PLR0913
     """Teacher-free check: does the distilled policy catch in the reference sim?"""
     device = next(net.parameters()).device
-    env = CatchEnv(num_envs=num_envs, seed=11, serve_speed=(16.0, 20.0), radius=(1.5, 1.0), obs_mode="state")
+    env = CatchEnv(num_envs=num_envs, seed=11, serve_speed=(16.0, 20.0), radius=(1.5, 1.0), obs_mode="both")
     caught = done_total = 0
     for _ in range(8):
         obs = env.obs()
@@ -86,10 +86,10 @@ def bc_catch_rate(net, num_envs: int, mean, std) -> float:
     return caught / max(done_total, 1)
 
 
-def export(net, mean: np.ndarray, std: np.ndarray, count: int, template: pathlib.Path, out: pathlib.Path) -> None:
-    """Write the BC weights into a copy of an SKRL checkpoint."""
-    ck = torch.load(str(template), map_location="cpu", weights_only=False)
-    state = ck["policy"]
+def export(net, mean: np.ndarray, std: np.ndarray, count: int, out: pathlib.Path) -> None:
+    """Write an SKRL-shaped checkpoint from the distilled policy alone."""
+    state = {}
+    ck = {"policy": state, "observation_preprocessor": {}}
     modules = [net[0], net[2], net[4]]
     for k, module in ((0, modules[0]), (2, modules[1])):
         state[f"net.{k}.weight"] = module.weight.detach().cpu().clone()
@@ -108,18 +108,18 @@ def export(net, mean: np.ndarray, std: np.ndarray, count: int, template: pathlib
     normalizer["current_count"] = torch.tensor(float(count), dtype=torch.float64)
     out.parent.mkdir(parents=True, exist_ok=True)
     torch.save(ck, str(out))
-    print(f"wrote {out} (template {template.name}, policy + normalizer replaced)")
+    print(f"wrote {out} (policy + normalizer, obs {mean.shape[0]} dims)")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--template", required=True, type=pathlib.Path, help="checkpoint to patch")
+    parser.add_argument("--template", type=pathlib.Path, help="unused, kept for old callers")
     parser.add_argument("--out", required=True, type=pathlib.Path)
     parser.add_argument("--serves", type=int, default=1536)
     parser.add_argument("--envs", type=int, default=256)
     parser.add_argument("--epochs", type=int, default=400)
     parser.add_argument("--batch", type=int, default=1024)
-    parser.add_argument("--cache", default="/tmp/tennis_bc_dataset.npz", help="demonstration cache")
+    parser.add_argument("--cache", default="/tmp/tennis_bc_dataset_both.npz", help="demonstration cache")
     args = parser.parse_args()
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -129,7 +129,7 @@ def main() -> None:
         obs, act = data["obs"], data["act"]
     else:
         rng = np.random.default_rng(0)
-        env = CatchEnv(num_envs=args.envs, seed=0, serve_speed=(16.0, 20.0), radius=(1.5, 1.0), obs_mode="state")
+        env = CatchEnv(num_envs=args.envs, seed=0, serve_speed=(16.0, 20.0), radius=(1.5, 1.0), obs_mode="both")
         obs_buf, act_buf = [], []
         for _ in range(max(1, args.serves // args.envs)):
             serves = [sample_serve(rng, (16.0, 20.0), (0.6, 1.0), (-4.9, 0.0), (1.5, 1.0)) for _ in range(args.envs)]
@@ -151,7 +151,7 @@ def main() -> None:
     net = train_bc((obs - mean) / std, act, args.epochs, args.batch, device)
     rate = bc_catch_rate(net, num_envs=128, mean=mean, std=std)
     print(f"BC policy catch rate in the reference sim: {rate:.0%}")
-    export(net, mean, std, len(obs), args.template, args.out)
+    export(net, mean, std, len(obs), args.out)
 
 
 if __name__ == "__main__":
