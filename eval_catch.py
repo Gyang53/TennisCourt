@@ -15,7 +15,7 @@ import torch
 
 from ball_physics import plan_serve
 from catch_env import OBS_DIM, OBS_MODE_FOR_DIM, CatchEnv
-from train_catch import VMAX, ActorCritic
+from train_catch import VMAX, ActorCritic, pick_device
 
 
 def exact_serves(n, rng, speed, clearance):

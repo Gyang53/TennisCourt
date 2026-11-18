@@ -58,13 +58,22 @@ class ActorCritic(nn.Module):
 
     @torch.no_grad()
     def act(self, obs, deterministic=False):
-        mean, value = self.forward(obs)
+        """obs may be numpy or a tensor; runs on whatever device the net is on."""
+        device = next(self.parameters()).device
+        x = torch.as_tensor(np.asarray(obs), dtype=torch.float32, device=device)
+        mean, value = self.forward(x)
         std = self.log_std.exp()
         dist = torch.distributions.Normal(mean, std)
         action = mean if deterministic else dist.sample()
         raw = action.clamp(-1.0, 1.0)
         logp = dist.log_prob(action).sum(-1)
-        return raw.numpy(), value.numpy(), logp.numpy()
+        return raw.cpu().numpy(), value.cpu().numpy(), logp.cpu().numpy()
+
+
+def pick_device(name=""):
+    if name:
+        return torch.device(name)
+    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def apply_phase(env, phase: int):
@@ -78,7 +87,9 @@ def train(args):
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
     env = CatchEnv(num_envs=args.envs, seed=args.seed)
-    net = ActorCritic(hidden=args.hidden)
+    dev = pick_device(args.device)
+    net = ActorCritic(hidden=args.hidden).to(dev)
+    print(f"device {dev}", flush=True)
     if args.init:                       # continue from a (cloned) policy
         ckpt = torch.load(args.init, map_location="cpu")
         net.load_state_dict(ckpt["model"])
@@ -112,16 +123,17 @@ def train(args):
                 ep_return[e] = 0.0
         stats["steps"] += args.envs * args.rollout
 
-        o = torch.from_numpy(np.stack(buf_obs))
-        a = torch.from_numpy(np.stack(buf_act))
-        lp = torch.from_numpy(np.stack(buf_logp))
-        val = torch.from_numpy(np.stack(buf_val))
-        rew = torch.from_numpy(np.stack(buf_rew))
-        don = torch.from_numpy(np.stack(buf_done))
+        dev = next(net.parameters()).device
+        o = torch.as_tensor(np.stack(buf_obs), device=dev)
+        a = torch.as_tensor(np.stack(buf_act), device=dev)
+        lp = torch.as_tensor(np.stack(buf_logp), device=dev)
+        val = torch.as_tensor(np.stack(buf_val), device=dev)
+        rew = torch.as_tensor(np.stack(buf_rew), device=dev)
+        don = torch.as_tensor(np.stack(buf_done), device=dev)
 
         # GAE
         with torch.no_grad():
-            _, last_v = net(torch.from_numpy(obs))
+            _, last_v = net(torch.as_tensor(obs, device=dev))
             adv = torch.zeros_like(rew)
             gae = torch.zeros(args.envs)
             for t in reversed(range(args.rollout)):
@@ -194,6 +206,7 @@ def main():
     ap.add_argument("--log-every", type=int, default=5)
     ap.add_argument("--save-every", type=int, default=50)
     ap.add_argument("--hidden", type=int, default=128)
+    ap.add_argument("--device", default="", help="cuda / cpu (default: auto)")
     ap.add_argument("--init", default="", help="checkpoint to start from")
     ap.add_argument("--out", default="policies/catch_ppo.pt")
     train(ap.parse_args())

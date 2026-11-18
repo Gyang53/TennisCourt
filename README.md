@@ -275,14 +275,26 @@ labels are a function of the input and distillation works.
    (`traj[:, 0] = spawn`) - otherwise the policy trains on (0,0,0) as the first
    trajectory point and fails on the correct observation at evaluation.
 
+The drive now accelerates along its own spec (fore 3.5, lat 2.5, decel 5.0 m/s^2)
+instead of jumping to the commanded speed - that removed the startup hop
+(chassis peak 0.1854 -> 0.1584 m) and the policy was retrained on it:
+
 | policy | 12-16 r0.5 | 12-16 r1.5 | 16-20 r3.0 |
 |---|---|---|---|
-| teacher (scripted) | 96% | 96% | 71% |
-| **`policies/catch_bc_A3.pt`** (61-dim obs incl. the trajectory) | **62%** | **52%** | **50%** |
+| teacher (scripted) | 100% | 96% | 50% |
+| **`policies/catch_bc_spec.pt`** (drive-spec accelerations, 61-dim obs) | **81%** | **71%** | 42% |
+| `policies/catch_bc_A3.pt` (instant commands, hops at startup) | 62% | 52% | 50% |
 | `policies/catch_bc.pt` (12-dim state obs, shipped before) | 59% | 34% | 0% |
 
-This is the policy to use now: it halves the gap on the normal serves and, for the
-first time, catches half of the full-range fast serves (16-20 m/s), which was 0%.
+`catch_bc_spec.pt` is the policy to use: 81/71/42% with physically correct
+acceleration and no startup hop.
+
+Training runs on the GPU when one is present (`--device cuda|cpu`, auto-detected;
+the RTX 5060 is used at capability 12.0). Note the honest split: the policy update
+is 1.7x faster on the GPU (60k samples x 10 epochs: 1.37 s -> 0.80 s), but the
+bottleneck is the CPU physics - MotrixSim's backend is Rust/CPU, so a GPU only
+helps the optimiser. For GPU physics you would need a CUDA backend (mjwarp,
+Genesis, Isaac through UniLab).
 
 ### Startup hop
 

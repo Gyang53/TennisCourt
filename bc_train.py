@@ -18,7 +18,7 @@ import torch.nn as nn
 
 from catch_env import CatchEnv
 from teacher_oracle import record
-from train_catch import VMAX, ActorCritic, apply_phase
+from train_catch import VMAX, ActorCritic, apply_phase, pick_device
 
 VMAX_NP = np.asarray(VMAX, dtype=float)
 
@@ -134,6 +134,7 @@ def main():
     ap.add_argument("--batch", type=int, default=512)
     ap.add_argument("--lr", type=float, default=3e-4)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--device", default="", help="cuda / cpu (default: auto)")
     ap.add_argument("--hidden", type=int, default=128)
     ap.add_argument("--oracle", action="store_true", help="two-pass oracle demos")
     ap.add_argument("--batched", action="store_true", help="batched two-pass demos")
@@ -163,9 +164,12 @@ def main():
         obs, act = collect(env, args.episodes)
     print(f"dataset: {obs.shape[0]} transitions", flush=True)
 
-    net = ActorCritic(hidden=args.hidden)
+    dev = pick_device(args.device)
+    net = ActorCritic(hidden=args.hidden).to(dev)
+    print(f"device {dev}  dataset {obs.shape[0]}", flush=True)
     opt = torch.optim.Adam(net.parameters(), lr=args.lr)
-    O, A = torch.from_numpy(obs), torch.from_numpy(act)
+    O = torch.as_tensor(obs, device=dev)
+    A = torch.as_tensor(act, device=dev)
     n = O.shape[0]
     for epoch in range(args.epochs):
         perm = torch.randperm(n)
@@ -177,12 +181,12 @@ def main():
             opt.zero_grad()
             loss.backward()
             opt.step()
-            total += float(loss) * len(idx)
+            total += float(loss.detach().cpu()) * len(idx)
         if epoch % 5 == 0 or epoch == args.epochs - 1:
             print(f"epoch {epoch:3d}  mse {total / n:.5f}", flush=True)
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
-    torch.save({"model": net.state_dict(), "obs_dim": int(O.shape[1]),
-                    "hidden": net.trunk[0].out_features}, args.out)
+    torch.save({"model": {k: v.cpu() for k, v in net.state_dict().items()},
+                "obs_dim": int(O.shape[1]), "hidden": net.trunk[0].out_features}, args.out)
     print(f"saved {args.out}")
 
 
