@@ -239,6 +239,20 @@ algo.agent.entropy_loss_scale=0.0 algo.agent.rollouts=64` → 8000 控制步 = 4
 * 不要跨脚本比较绝对数字；
 * `eval_cross_engine.py` 对 61 维观测仍然不可靠（已发现两处 bug，61 维下仍报 0%），优先用 `eval_three_tiers.py`。
 
+## GPU 训练：平面基座抽象（`tennis_catch_planar`）
+
+结论先行：**mujoco-warp 无法仿真这个麦轮机构**（4 球/辊、1 球/辊、圆柱/辊、球轮四种碰撞体都不产生牵引；`nworld=1` 亦然；摩擦各向同性/`condim=4`/`cone`/`impratio`/`PGS` 全无效，而 CPU MuJoCo 每种都能驱动；warp 里车身还坐得更高 0.167 vs 0.158）。MotrixSim **没有外部力注入 API**，所以"现象学推力"无法两引擎一致实现。
+
+因此 GPU 训练改用**平面基座抽象**：`planar_catch.xml` 把 4 轮 + 36 辊子的接触换成 3 个正交速度伺服关节（x/y/yaw），保留实测驱动斜坡（3.5/2.5 加速、5.0 减速、4.0/4.5 m/s），观测与动作接口与完整模型完全一致（61 维 / (fwd,left,yaw)）。
+
+| 项 | 结果 |
+|---|---|
+| 方向/量纲 | 2 s 前进 **5.71 m**（+x，与参考约定一致：车辆前向 = (sinθ, −cosθ)）|
+| GPU 吞吐（warp，8192 世界）| **57.2k env-steps/s**（143 ms/控制步）= CPU 路径的 **~16×** |
+| 同一物理在 CPU 上 | 用于验证的完整麦轮模型仍跑 MotrixSim |
+
+训练：`mxlab train task=tennis_catch_planar/skrl.ppo sim=mujoco_warp`（8192 世界、`timesteps=2000` = 16.4M env 步 ≈ 6 分钟），热启动用交付策略；训练完在**完整麦轮模型**（`eval_three_tiers.py`）上验证可迁移性。
+
 ## 下一步（按顺序）
 
 1. **GPU 诊断 27%**：在记录的真实穿越时刻量笼坐标系下的脱靶距离（CPU 侧同一套方法曾定位出"目标定义错误"和"横移滑移"）。若属跟踪问题，把辊子接触/摩擦参数按实测驱动规格（加速 3.5/2.5、减速 5.0、vmax 4.0/4.5）拟合。
