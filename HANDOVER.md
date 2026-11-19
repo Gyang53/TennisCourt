@@ -251,7 +251,18 @@ algo.agent.entropy_loss_scale=0.0 algo.agent.rollouts=64` → 8000 控制步 = 4
 | GPU 吞吐（warp，8192 世界）| **57.2k env-steps/s**（143 ms/控制步）= CPU 路径的 **~16×** |
 | 同一物理在 CPU 上 | 用于验证的完整麦轮模型仍跑 MotrixSim |
 
-训练：`mxlab train task=tennis_catch_planar/skrl.ppo sim=mujoco_warp`（8192 世界、`timesteps=2000` = 16.4M env 步 ≈ 6 分钟），热启动用交付策略；训练完在**完整麦轮模型**（`eval_three_tiers.py`）上验证可迁移性。
+训练：`mxlab train task=tennis_catch_planar/skrl.ppo sim=mujoco_warp`（8192 世界、`timesteps=2000` = 16.4M env 步，实测 **5 分 40 秒** = 48k env-steps/s），热启动用交付策略。
+
+### 抽象必须匹配机构的"可达动力学"
+
+未标定的平面基座（把 4.5 m/s 横移指令全额执行）导致微调把策略拉向不存在的权限：
+
+| 评测环境 | 交付策略（起点）| GPU 微调（未标定抽象）|
+|---|---|---|
+| 平面基座 | 100% / 100% / 30% | 99% / 99% / **39%**（微调有效）|
+| **完整麦轮模型** | 41% / 55% / 37% | **12% / 12% / 21%**（迁移失败）|
+
+实测麦轮稳态可达比（斜坡后）：前进 **0.94**、横移 **0.93**、转向 **0.95** —— 用 `PLANAR_GAINS` 灌进平面基座后，1.2 s 时的速度是 3.76 / 2.78 m/s，与完整模型的 3.76 / 2.79 误差 <1%。重训后重新验证迁移。
 
 ## 下一步（按顺序）
 

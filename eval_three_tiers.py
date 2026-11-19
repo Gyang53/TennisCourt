@@ -59,9 +59,9 @@ def load_policy(path: pathlib.Path, ours: bool):
     return net, pre["running_mean"].float(), pre["running_variance"].float()
 
 
-def run(net, mean, var, speed, radius, num_envs: int, rounds: int) -> float:
+def run(net, mean, var, speed, radius, num_envs: int, rounds: int, task: str = "tennis_catch") -> float:
     env = registry.make(
-        "tennis_catch",
+        task,
         num_envs=num_envs,
         env_cfg_override={"serve_speed_range": speed, "serve_radius": radius},
     )
@@ -86,13 +86,14 @@ def main() -> None:
     parser.add_argument("--ours", action="store_true", help="ActorCritic checkpoint instead of SKRL")
     parser.add_argument("--envs", type=int, default=256)
     parser.add_argument("--rounds", type=int, default=2)
+    parser.add_argument("--task", default="tennis_catch", help="tennis_catch (wheels) or tennis_catch_planar")
     args = parser.parse_args()
 
     register()
     net, mean, var = load_policy(args.ckpt, args.ours)
     print(f"policy {args.ckpt.name}")
     for label, speed, radius in TIERS:
-        rate = run(net, mean, var, speed, radius, args.envs, args.rounds)
+        rate = run(net, mean, var, speed, radius, args.envs, args.rounds, args.task)
         print(f"{label:<28}{rate:>8.0%}")
 
 
