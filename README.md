@@ -447,6 +447,25 @@ the spawn heading read from the state instead of assumed.  Retrained for the sam
 Rotating only when the intercept needs it costs nothing in catch rate here, and the
 `yaw_penalty` knob defaults to 0 so the other tasks are unchanged.
 
+### Aiming the cage opening
+
+The cage is open on the body -y side (three 0.36 m walls and a 0.08 m lip), so the
+opening has to face the ball, and a free-yaw policy leaves it 26 degrees off on
+average.  `facing_scale` pays `cos(angle between the opening and the ball)` every
+control step; enabling it at 0.001, tightening the heading threshold to 35 degrees
+and retraining once:
+
+| metric (tier 3, 256x2) | yaw threshold only | + aiming term |
+| --- | --- | --- |
+| mean opening misalignment | 26 deg | **2.5 deg** |
+| time within 30 deg | - | **100%** |
+| mean / max heading offset | 23.1 / 37.5 deg | **22.2 / 33.5 deg** |
+| mean commanded yaw rate | 0.23 | 0.20 |
+| catch rate | 91.5% | **93.8%** |
+
+Facing the ball costs no yaw budget: the policy rotates a little less and catches
+more.  `facing_scale` defaults to 0, so the other tasks keep their reward.
+
 ## Cameras
 
 Two mono cameras migrated from the source `RallyCourt.usd` (LeftCam / RightCam):

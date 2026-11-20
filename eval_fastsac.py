@@ -91,11 +91,22 @@ def main() -> None:
     caught = done = 0
     yaw_offs: list[float] = []
     yaw_cmds: list[float] = []
+    mis_all: list[float] = []
+    corrections = correctable = 0
+    prev_mis = None
     for _ in range(240 * args.rounds):
         with torch.no_grad():
             obs = torch.from_numpy(env.state.obs.policy.numpy()).float()
             action, _, _ = actor(normalizer(obs, update=False))
         yaw_cmds.append(float(action[..., 2].abs().mean()))
+        ddx, ddy, _ = env._base_frame_ball()
+        bearing = float(np.median(np.arctan2(np.asarray(ddy), np.asarray(ddx))))
+        mis = (bearing + np.pi / 2.0 + np.pi) % (2.0 * np.pi) - np.pi
+        mis_all.append(abs(mis))
+        if prev_mis is not None:
+            correctable += 1
+            corrections += int(abs(mis) < abs(prev_mis))
+        prev_mis = mis
         state = env.step(action)
         pose = np.array(env.sim._data.dof_pos[:, base], dtype=np.float64)
         yaw = np.arctan2(2 * (pose[:, 6] * pose[:, 5] + pose[:, 3] * pose[:, 4]),
@@ -106,6 +117,9 @@ def main() -> None:
             caught += int((state.metrics["catch_rate"].numpy()[finished] > 0).sum())
             done += int(finished.sum())
     over = 100.0 * float(np.mean(np.array(yaw_offs) > 40.0)) if yaw_offs else 0.0
+    print(f"aim: mean|misalign| {np.degrees(np.mean(mis_all)):5.1f} deg, "
+          f"<30deg {100.0 * np.mean(np.array(mis_all) < np.radians(30)):4.1f}%, "
+          f"turning toward aim {100.0 * corrections / max(correctable, 1):4.1f}% of steps")
     print(f"yaw: mean|off| {np.mean(yaw_offs):5.1f} deg, max {np.max(yaw_offs):5.1f} deg, "
           f"steps>40deg {over:4.1f}%, mean|wz| {np.mean(yaw_cmds):.2f}")
     print(
