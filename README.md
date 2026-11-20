@@ -393,8 +393,39 @@ python -m mxlab train +task/tennis_catch=skrl.ppo num_envs=1024 \
   '+algo.trainer.env_overrides.serve_radius=4.9'
 ```
 
-The PPO ladder saturates near 50% on that band; reaching 60% needs an imitation
-stage (BC on successful trajectories, then DAgger), which is the next step.
+The PPO ladder saturates near 50% on that band, so the same task was then trained
+with MotrixLab's off-policy provider:
+
+### FastSAC on the 20 m/s band
+
+`motrix.fastsac` (replay + distributional critic + target smoothing, UTD 8) on
+`tennis_catch_wide` — the registered task with the wide serve radius, so training
+and evaluation share one distribution. Two settings matter: `gamma` must cover the
+4 s episode (0.99, not the 0.97 default) and the update ratio can stay at 8 because
+the FastSAC profiler shows the collector blocked on CPU physics while the learner
+waits.
+
+512 worlds x 6000 iterations, ~18 minutes, from scratch:
+
+| checkpoint | tier 3 (16-20 m/s, r4.9) |
+| --- | --- |
+| 250 | 0.0% |
+| 1000 | 10.5% |
+| 3000 | 88.1% |
+| `model_0005750.pt` (full protocol, 256x2) | **90.4%** (889/983) |
+
+For reference, on the same protocol: `catch_ppo.pt` 43%, best PPO ladder
+checkpoint 52%.  The FastSAC policy specialises to its training band — the same
+checkpoint scores 82.0% on the deployment band (16-20 m/s, r=1.5), 27.5% on tier 2
+and 21.8% on tier 1, so quote one policy per band or train on a mixture.
+
+```bash
+# train (the recipe lives in configs/task/tennis_catch_wide/motrix.fastsac.yaml)
+python -m mxlab train +task/tennis_catch_wide=motrix.fastsac
+# evaluate a checkpoint: mxlab play cannot load the fastsac provider
+python eval_fastsac.py --ckpt <run>/checkpoints/model_0005750.pt \
+  --run-config <run>/task_config.yaml --tier 3 --envs 256 --rounds 2
+```
 
 ## Cameras
 
