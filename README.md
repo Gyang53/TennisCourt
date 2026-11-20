@@ -427,6 +427,26 @@ python eval_fastsac.py --ckpt <run>/checkpoints/model_0005750.pt \
   --run-config <run>/task_config.yaml --tier 3 --envs 256 --rounds 2
 ```
 
+### Yawing: allowed, but bounded
+
+The policy aims the paddle with body yaw, and the free-yaw FastSAC policy spends
+most of its time beyond 40 degrees from the spawn heading.  `tennis_catch_yaw`
+adds a heading threshold to the reward: inside `yaw_limit` (40 degrees) nothing is
+charged, beyond it every radian costs `yaw_penalty` (0.002) per control step, with
+the spawn heading read from the state instead of assumed.  Retrained for the same
+~19 minutes (512 worlds x 6000 iterations):
+
+| metric (tier 3, 256x2) | free yaw | 40 deg threshold |
+| --- | --- | --- |
+| mean heading offset | 37.8 deg | **23.1 deg** |
+| max heading offset | 56.2 deg | **37.5 deg** |
+| steps beyond 40 deg | 56.5% | **0.0%** |
+| mean commanded yaw rate | 0.28 | 0.23 |
+| catch rate | 90.4% | **91.5%** |
+
+Rotating only when the intercept needs it costs nothing in catch rate here, and the
+`yaw_penalty` knob defaults to 0 so the other tasks are unchanged.
+
 ## Cameras
 
 Two mono cameras migrated from the source `RallyCourt.usd` (LeftCam / RightCam):

@@ -14,17 +14,43 @@ from __future__ import annotations
 import argparse
 import pathlib
 
+import numpy as np
+
 import torch
 import yaml
 
 from motrix_env_core import registry
 from motrix_envs import register
+from motrix_envs.basic.tennis_catch.state_io import dof_layout
 from eval_three_tiers import TIERS
 
 from motrix_rl_builtin.fastsac.buffer import EmpiricalNormalization
 from motrix_rl_builtin.fastsac.networks import Actor
 
 register()
+
+
+def load_fastsac(ckpt: pathlib.Path, run_config: pathlib.Path):
+    """Build the actor and observation normalizer from a fastsac checkpoint."""
+    agent_cfg = yaml.safe_load(pathlib.Path(run_config).read_text())["algo"]["agent"]
+    state = torch.load(str(ckpt), map_location="cpu", weights_only=False)
+    actor_state = state["actor"]
+    obs_dim = int(actor_state["net.0.weight"].shape[1])
+    actor = Actor(
+        n_obs=obs_dim,
+        n_act=3,
+        hidden_dim=int(agent_cfg["actor_hidden_dim"]),
+        log_std_max=float(agent_cfg["log_std_max"]),
+        log_std_min=float(agent_cfg["log_std_min"]),
+        use_tanh=bool(agent_cfg["use_tanh"]),
+        use_layer_norm=bool(agent_cfg["use_layer_norm"]),
+    )
+    actor.load_state_dict(actor_state, strict=True)
+    actor.eval()
+    normalizer = EmpiricalNormalization(shape=obs_dim, device="cpu")
+    normalizer.load_state_dict(state["obs_normalizer"], strict=True)
+    normalizer.eval()
+    return actor, normalizer
 
 
 def main() -> None:
@@ -41,25 +67,7 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args()
 
-    agent_cfg = yaml.safe_load(args.run_config.read_text())["algo"]["agent"]
-    ckpt = torch.load(str(args.ckpt), map_location="cpu", weights_only=False)
-    actor_state = ckpt["actor"]
-    obs_dim = int(actor_state["net.0.weight"].shape[1])
-
-    actor = Actor(
-        n_obs=obs_dim,
-        n_act=3,
-        hidden_dim=int(agent_cfg["actor_hidden_dim"]),
-        log_std_max=float(agent_cfg["log_std_max"]),
-        log_std_min=float(agent_cfg["log_std_min"]),
-        use_tanh=bool(agent_cfg["use_tanh"]),
-        use_layer_norm=bool(agent_cfg["use_layer_norm"]),
-    )
-    actor.load_state_dict(actor_state, strict=True)
-    actor.eval()
-    normalizer = EmpiricalNormalization(shape=obs_dim, device="cpu")
-    normalizer.load_state_dict(ckpt["obs_normalizer"], strict=True)
-    normalizer.eval()
+    actor, normalizer = load_fastsac(args.ckpt, args.run_config)
 
     label, speed, radius = TIERS[args.tier - 1]
     if args.serve_speed is not None:
@@ -75,16 +83,31 @@ def main() -> None:
         env_cfg_override={"serve_speed_range": speed, "serve_radius": radius},
     )
     env.init_state()
+    layout = dof_layout(env.sim)
+    base = layout["base_pos"]
+    pose0 = np.array(env.sim._data.dof_pos[:, base], dtype=np.float64)
+    yaw0 = float(np.median(np.arctan2(2 * (pose0[:, 6] * pose0[:, 5] + pose0[:, 3] * pose0[:, 4]),
+                                      1 - 2 * (pose0[:, 4] ** 2 + pose0[:, 5] ** 2))))
     caught = done = 0
+    yaw_offs: list[float] = []
+    yaw_cmds: list[float] = []
     for _ in range(240 * args.rounds):
         with torch.no_grad():
             obs = torch.from_numpy(env.state.obs.policy.numpy()).float()
             action, _, _ = actor(normalizer(obs, update=False))
+        yaw_cmds.append(float(action[..., 2].abs().mean()))
         state = env.step(action)
+        pose = np.array(env.sim._data.dof_pos[:, base], dtype=np.float64)
+        yaw = np.arctan2(2 * (pose[:, 6] * pose[:, 5] + pose[:, 3] * pose[:, 4]),
+                         1 - 2 * (pose[:, 4] ** 2 + pose[:, 5] ** 2))
+        yaw_offs.append(float(np.median(np.abs(np.degrees((yaw - yaw0 + np.pi) % (2 * np.pi) - np.pi)))))
         finished = state.done.numpy()
         if finished.any():
             caught += int((state.metrics["catch_rate"].numpy()[finished] > 0).sum())
             done += int(finished.sum())
+    over = 100.0 * float(np.mean(np.array(yaw_offs) > 40.0)) if yaw_offs else 0.0
+    print(f"yaw: mean|off| {np.mean(yaw_offs):5.1f} deg, max {np.max(yaw_offs):5.1f} deg, "
+          f"steps>40deg {over:4.1f}%, mean|wz| {np.mean(yaw_cmds):.2f}")
     print(
         f"{args.ckpt.name:22s} tier{args.tier} {100 * caught / max(done, 1):5.1f}%  ({caught}/{done})  [{label}]"
     )
