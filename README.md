@@ -351,6 +351,51 @@ cloned policy inherits that ceiling. The shipped policy is the 12-dim one; the
    `log_std` starting at -2.0 and the actor frozen for the first ~20 iterations
    (the naive fine-tune destroyed the cloned policy: 50% -> 1%).
 
+## MotrixLab training (MotrixSim physics + CUDA learner)
+
+The catch task also runs inside MotrixLab, where the physics is MotrixSim's CPU
+batch and the PPO learner runs on CUDA.  Policies are quoted on the three serve
+tiers of `eval_three_tiers.py`; the fastest one is the 20 m/s band
+(16-20 m/s, radius 4.9).
+
+| tool | purpose |
+| --- | --- |
+| `eval_three_tiers.py --ckpt ... [--ours] [--task ...] [--model xml] [--seed N]` | three-tier reporting protocol |
+| `eval_tier.py --ckpt ... --tier 3` | single-tier companion for checkpoint sweeps |
+| `view_catch.py --ckpt ... --tier 3` | live viewport: MotrixSim physics, policy on CUDA |
+
+Measured on 256 worlds x 2 rounds, seed 0:
+
+| policy | 12-16 m/s r0.5 | 12-16 m/s r1.5 | 16-20 m/s r4.9 |
+| --- | --- | --- | --- |
+| `policies/catch_ppo.pt` (reference) | 72% | 52% | 43% |
+| 20 m/s fine-tune (best ladder checkpoint) | 51% | 37% | 52% |
+
+What the experiments established:
+
+* more compute does not help: a 10M env-step run on the 20 m/s band collapsed to 0%;
+* the collapse is driven by the update size: `learning_rate=5e-4` loses a 39%
+  policy within 100 control steps, `1e-5` holds it and gains a few points;
+* the workable recipe is a ladder: `learning_rate=3e-5`, `rollouts=128`, short
+  stages (~1500 control steps) and checkpoint selection **by evaluation** —
+  training reward peaks earlier than catch rate;
+* `algo.trainer.env_overrides` sets the training serve band without touching the
+  registered task, e.g. `serve_speed_range=[16,20]` and `serve_radius=4.9`.
+
+Starting a stage from a previous checkpoint:
+
+```bash
+source ~/data/MotrixLab/.venv/bin/activate
+python -m mxlab train +task/tennis_catch=skrl.ppo num_envs=1024 \
+  algo.trainer.timesteps=1500 algo.trainer.init_policy=<checkpoint>.pt \
+  algo.agent.learning_rate=0.00003 algo.agent.rollouts=128 checkpoint.interval=25 \
+  '+algo.trainer.env_overrides.serve_speed_range=[16,20]' \
+  '+algo.trainer.env_overrides.serve_radius=4.9'
+```
+
+The PPO ladder saturates near 50% on that band; reaching 60% needs an imitation
+stage (BC on successful trajectories, then DAgger), which is the next step.
+
 ## Cameras
 
 Two mono cameras migrated from the source `RallyCourt.usd` (LeftCam / RightCam):
