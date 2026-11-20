@@ -457,8 +457,8 @@ and retraining once:
 
 | metric (tier 3, 256x2) | yaw threshold only | + aiming term |
 | --- | --- | --- |
-| mean opening misalignment | 26 deg | **2.5 deg** |
-| time within 30 deg | - | **100%** |
+| mean opening misalignment | 18.3 deg | **2.5 deg** |
+| time within 30 deg | 92.1% | **100%** |
 | mean / max heading offset | 23.1 / 37.5 deg | **22.2 / 33.5 deg** |
 | mean commanded yaw rate | 0.23 | 0.20 |
 | catch rate | 91.5% | **93.8%** |
