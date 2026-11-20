@@ -324,3 +324,54 @@ algo.agent.entropy_loss_scale=0.0 algo.agent.rollouts=64` → 8000 控制步 = 4
 * BC/DAgger 的标签必须是**观测的函数**（解析目标），否则监督=噪声（拟合 MSE 0.44 那次就是这个）
 * 训练/评测的观测必须一致（`set_serves` 没初始化轨迹缓冲区那次导致"拟合完美但 0%"）
 * 未提交的临时环境改动：`ms` 里装了 mujoco/mjwarp 4.0.1；`~/data/dev/{mujoco,mujoco_warp}` 源码树与 `mujoco_install` 保留可用
+
+## GPU 物理（方案 1）尝试的结论（2026-11-19）
+
+目标：完整麦轮机构跑 warp 物理（训练提速 2-3 倍），观测逐位不变、策略无需重训。
+实施：`gen_gpu_scene.py` 把整个球场绕 z 转 -90°（机器人停在 yaw=0，避开 warp 在非零 yaw
+下的底盘下沉/接触病态）；`tennis_catch_gpu` env 用 `frame_rot_deg=-90` 做任务系↔世界系换算。
+
+实测（同一交付策略 `catch_ppo.pt`，128 worlds × 2 轮）：
+
+| 场景/引擎 | 接球率 |
+| --- | --- |
+| `tennis_catch` / MotrixSim | 95% |
+| `tennis_catch_gpu` / MotrixSim（旋转层等价性）| 96% |
+| `tennis_catch_gpu` / mujoco-warp | **0%** |
+
+原因（逐层定位）：
+1. warp 对 `<velocity>` 执行器**符号相反**（同一轮速指令：MotrixSim 前进 +1.05 m，
+   warp 前进 -1.03 m；横移 +0.93 vs -0.91）。env 里已按后端加 `-ctrl` 修正。
+2. 修正后驱动方向/距离对齐（fwd 1.03 vs 1.05、left 0.91 vs 0.93），但完整任务仍 0%：
+   轮子滚子的接触动力学在 warp 中不等价——底盘沉降 0.263 m、116 个接触、轮子打滑方式不同，
+   策略的动作→运动映射失效。
+
+**结论**：warp + 完整麦轮机构不可用于训练（已代码化保留 `tennis_catch_gpu`，供后续 warp
+修复后重测）。生产训练配置 = **MotrixSim CPU 物理（512 世界，`taskset -c 0-15` 限 16 核）
++ GPU 上跑 PPO learner**，实测 3.7k env-steps/s、BC 基准 95-97%、每轮 4.1M 步约 20 分钟。
+
+## 微调轮次与交付策略（2026-11-19 更新）
+
+口径教训：`eval_three_tiers.py` 的三档（12-16 m/s r0.5 / r1.5、16-20 m/s r4.9）**不是**
+部署口径；部署/演示/ROS2 的默认发球是 **(16-20 m/s, r=1.5)**，它才是交付对比的唯一
+基准。三档数字里 12-16 m/s 两档（球速低于训练分布、落点几何不同）只用于鲁棒性参考。
+
+| 策略（部署范围 16-20 r1.5，~2200 局）| 部署范围 | 宽窗 16-20 r4.9 |
+| --- | --- | --- |
+| `catch_ppo_pre_s43best.pt`（旧交付，备份）| 96.5% | 36% |
+| **`catch_ppo.pt`（现交付，来自 11-31 run 的 `best_agent.pt`，seed 43）** | **97.0%** | **43%** |
+| 13-28 run（critic 预热）best / latest | 95% / 7% | 38% / 3% |
+
+要点：
+1. **PPO 微调尾部会崩溃**（`latest` 掉到 7-39%），但 `best_agent.pt` 是确定性策略
+   （推理用均值、无采样），实测稳定且优于原交付 → 交付以 **best 检查点**为准、用
+   `import_skrl_to_policy.py` 转回 ActorCritic 格式。
+2. **critic 随机初始化会把 BC 演员拖坏**：`init_policy` 现在同时加载 `value` 键
+   （`motrix_rl_skrl/ppo.py` 的 `_load_initial_policy`），`export_value_warmstart.py`
+   用 BC 策略的 MC 回报回归价值网。但本轮（seed 45）critic 预热**未能阻止**尾部崩溃，
+   best 还略低（95%）→ 微调增益主要来自 seed/探索差异，不是 critic。
+3. 后续微调若再试：用任务 yaml 默认的 `entropy_loss_scale=0.004` 与探索带 0.1（不要
+   熵 0 + 固定小 std），并始终与 `catch_ppo_pre_s43best.pt` 做同口径 A/B。
+4. 训练内部 `metrics/catch_rate` **不可信**（成功轮次的曲线也全程 0），验收只认
+   `eval_three_tiers.py` 或部署范围复测。
+

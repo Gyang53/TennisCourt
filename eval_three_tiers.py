@@ -20,6 +20,7 @@ import torch
 from torch import nn
 
 from motrix_env_core import registry
+from motrix_env_core.config.scene import SceneCfg
 from motrix_envs import register
 
 TIERS = [
@@ -59,12 +60,22 @@ def load_policy(path: pathlib.Path, ours: bool):
     return net, pre["running_mean"].float(), pre["running_variance"].float()
 
 
-def run(net, mean, var, speed, radius, num_envs: int, rounds: int, task: str = "tennis_catch") -> float:
-    env = registry.make(
-        task,
-        num_envs=num_envs,
-        env_cfg_override={"serve_speed_range": speed, "serve_radius": radius},
-    )
+def run(
+    net,
+    mean,
+    var,
+    speed,
+    radius,
+    num_envs: int,
+    rounds: int,
+    task: str = "tennis_catch",
+    model: pathlib.Path | None = None,
+    seed: int | None = None,
+) -> float:
+    override = {"serve_speed_range": speed, "serve_radius": radius}
+    if model is not None:
+        override["scene"] = SceneCfg(file=str(model))
+    env = registry.make(task, num_envs=num_envs, env_cfg_override=override, seed=seed)
     env.init_state()
     caught = done = 0
     for _ in range(rounds):
@@ -87,13 +98,15 @@ def main() -> None:
     parser.add_argument("--envs", type=int, default=256)
     parser.add_argument("--rounds", type=int, default=2)
     parser.add_argument("--task", default="tennis_catch", help="tennis_catch (wheels) or tennis_catch_planar")
+    parser.add_argument("--model", type=pathlib.Path, default=None, help="variant XML to evaluate in")
+    parser.add_argument("--seed", type=int, default=None, help="fix the env seed so every model sees the same serves")
     args = parser.parse_args()
 
     register()
     net, mean, var = load_policy(args.ckpt, args.ours)
-    print(f"policy {args.ckpt.name}")
+    print(f"policy {args.ckpt.name}" + (f" in {args.model.name}" if args.model else ""))
     for label, speed, radius in TIERS:
-        rate = run(net, mean, var, speed, radius, args.envs, args.rounds, args.task)
+        rate = run(net, mean, var, speed, radius, args.envs, args.rounds, args.task, args.model, args.seed)
         print(f"{label:<28}{rate:>8.0%}")
 
 

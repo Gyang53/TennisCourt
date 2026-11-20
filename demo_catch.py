@@ -219,7 +219,7 @@ def render_frames(net, radius, speed, clear, seed, frames=3, obs_mode="both"):
                    radius=radius, aim=(-4.9, 0.0), obs_mode=obs_mode)
     obs = env.obs()
     saved = []
-    with mr.RenderApp(headless=False, fps=60) as app:
+    with mr.RenderApp(headless=False) as app:
         app.launch(env.model, batch=1)
         cam = app.system_camera
         cam.set_view(lookat=(-11.2, 0.0, 0.55), distance=5.2, elevation=-14, azimuth=-135)

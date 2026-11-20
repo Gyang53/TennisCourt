@@ -20,7 +20,7 @@ import torch
 import motrixsim.render as mr
 from catch_env import CatchEnv
 from eval_catch import load_policy, obs_mode_of
-from train_catch import VMAX
+from train_catch import VMAX, pick_device
 
 VMAX_NP = np.asarray(VMAX, float)
 
@@ -33,6 +33,7 @@ def main():
     ap.add_argument("--clearance", type=float, nargs=2, default=(0.45, 0.8))
     ap.add_argument("--radius", type=float, default=3.0)
     ap.add_argument("--fps", type=int, default=60)
+    ap.add_argument("--device", default="", help="cuda / cpu; default picks CUDA when present")
     ap.add_argument("--follow", action="store_true", default=True,
                     help="camera follows the robot")
     ap.add_argument("--wide", action="store_true", help="fixed wide camera")
@@ -40,6 +41,9 @@ def main():
 
     net = load_policy(args.policy)
     mode = obs_mode_of(args.policy)
+    dev = pick_device(args.device)
+    net = net.to(dev)
+    print(f"policy {args.policy} on {dev}; physics: MotrixSim (CPU)", flush=True)
     env = CatchEnv(num_envs=1, seed=int(time.time()) % 10000, serve_speed=args.speed,
                    serve_clearance=args.clearance, radius=(args.radius, args.radius),
                    obs_mode=mode)
@@ -47,7 +51,7 @@ def main():
     caught = 0
     played = 0
     frame_dt = 1.0 / args.fps
-    with mr.RenderApp(headless=False, fps=args.fps) as app:
+    with mr.RenderApp(headless=False) as app:
         app.launch(env.model, batch=1)
         cam = app.system_camera
         cam.set_view(lookat=(-11.5, 0.0, 0.8), distance=9.0, elevation=-18, azimuth=-140)
@@ -55,7 +59,8 @@ def main():
         while played < args.episodes or args.episodes == 0:
             t0 = time.perf_counter()
             with torch.no_grad():
-                a, _, _ = net.act(torch.from_numpy(env.obs()), deterministic=True)
+                # act() moves the observation to the net's device and returns numpy
+                a, _, _ = net.act(env.obs(), deterministic=True)
             _obs, _rew, done, info = env.step(a * VMAX_NP)
             if args.follow:
                 p = env.robot_pose()[0][0]
